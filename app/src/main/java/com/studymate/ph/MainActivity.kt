@@ -328,20 +328,3 @@ fun ProgressScreen(completed: Int, bestScore: Int, onBack: () -> Unit) {
         }
     }
 }
-" else "Start") }
-            OutlinedButton({ running = false; secondsLeft = 25 * 60 }) { Text("Reset") }
-        }
-        Spacer(Modifier.height(15.dp))
-        Text("25-minute focus session", color = MaterialTheme.colorScheme.onSurfaceVariant)
-    }
-}
-
-@Composable
-fun ProgressScreen(completed: Int, bestScore: Int, onBack: () -> Unit) {
-    Column(Modifier.fillMaxSize().padding(20.dp)) {
-        Header("🏆 Progress", onBack)
-        Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp)) {
-            Column(Modifier.padding(22.dp)) {
-                Text("Your Learning", fontSize = 24.sp, fontWeight = FontWeight.Bold)
-                Spacer(Modifier.height(15.dp))
-                Text("Quizzes completed: $com
