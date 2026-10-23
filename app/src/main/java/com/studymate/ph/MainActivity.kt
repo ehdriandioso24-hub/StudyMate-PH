@@ -494,7 +494,6 @@ private fun StudyMateApp() {
             showSubjectDialog = false
         }
     )
-}
 
 @Composable
 private fun StudyMateModals(
