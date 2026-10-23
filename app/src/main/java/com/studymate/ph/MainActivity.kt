@@ -1032,7 +1032,7 @@ private fun Heading(title: String, subtitle: String) {
 }
 
 @Composable
-private fun CardBox(title: String, subtitle: String, onClick: () -> Unit) {
+private fun CardBox(title: String, subtitle: String, onClick: () -> Unit = {}) {
     Card(
         modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
         colors = CardDefaults.cardColors(
