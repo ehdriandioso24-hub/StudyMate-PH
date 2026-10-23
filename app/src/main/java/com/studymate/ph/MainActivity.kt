@@ -461,6 +461,21 @@ private fun StudyMateApp() {
         screen = Screen.HOME.name
     }
 
+    // Thrill Mode countdown: auto-submit as incorrect at zero, with escalating red-zone ticks.
+    LaunchedEffect(currentScreen, questionIndex, revealed, secondsLeft) {
+        if (currentScreen == Screen.QUIZ && !revealed && questions.isNotEmpty()) {
+            if (secondsLeft <= 0) {
+                recordAnswer(-1, timedOut = true)
+            } else {
+                delay(1000)
+                secondsLeft = (secondsLeft - 1).coerceAtLeast(0)
+                if (secondsLeft <= 10 && tickingSound) {
+                    runCatching { toneGenerator.startTone(ToneGenerator.TONE_PROP_BEEP, if (secondsLeft <= 5) 110 else 65) }
+                }
+            }
+        }
+    }
+
     Scaffold(
         topBar = {
             GlassTopBar(
@@ -509,6 +524,14 @@ private fun StudyMateApp() {
                             badge = "Fast XP",
                             accent = Color(0xFFC084FC),
                             onClick = { openQuickQuiz() }
+                        )
+
+                        NeonActionCard(
+                            title = "🔥 Thrill Mode",
+                            subtitle = "20 questions • 30 sec each • 3 lives • 75% to pass",
+                            badge = "RED ZONE",
+                            accent = Color(0xFFF43F5E),
+                            onClick = { startQuiz("Mixed", daily = false) }
                         )
 
                         NeonActionCard(
@@ -703,6 +726,54 @@ private fun StudyMateApp() {
                                     Spacer(Modifier.weight(1f))
                                     Text("❤️ $lives", color = Color(0xFFF43F5E), fontWeight = FontWeight.Bold)
                                 }
+                                Card(
+                                    colors = CardDefaults.cardColors(containerColor = if (secondsLeft <= 10) Color(0xFF7F1D1D) else panel),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Column(Modifier.padding(12.dp)) {
+                                        Text(
+                                            if (secondsLeft <= 10) "🚨 RED ZONE!  HURRY!" else "⏱ Time remaining",
+                                            color = if (secondsLeft <= 10) Color(0xFFFF6B6B) else muted,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                        Text("$secondsLeft seconds", color = if (secondsLeft <= 10) Color.White else purple, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.ExtraBold)
+                                        LinearProgressIndicator(
+                                            progress = { secondsLeft / 30f },
+                                            modifier = Modifier.fillMaxWidth(),
+                                            color = if (secondsLeft <= 10) Color(0xFFF43F5E) else purple
+                                        )
+                                    }
+                                }
+                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                                    OutlinedButton(onClick = {
+                                        if (!revealed && !used5050 && (free5050 || fiftyFiftyItems > 0)) {
+                                            val wrong = q.choices.indices.filter { it != q.answer && it !in hiddenChoices }.shuffled().take(2).toSet()
+                                            hiddenChoices = hiddenChoices + wrong
+                                            used5050 = true
+                                            if (!free5050 && fiftyFiftyItems > 0) fiftyFiftyItems-- else free5050 = false
+                                            saveProgress()
+                                        }
+                                    }, enabled = !revealed && !used5050 && (free5050 || fiftyFiftyItems > 0), modifier = Modifier.weight(1f)) { Text("50:50") }
+                                    OutlinedButton(onClick = {
+                                        if (!revealed && !usedTimeFreeze && (freeTime || extraTimeItems > 0)) {
+                                            secondsLeft += 15
+                                            usedTimeFreeze = true
+                                            if (!freeTime && extraTimeItems > 0) extraTimeItems-- else freeTime = false
+                                            saveProgress()
+                                        }
+                                    }, enabled = !revealed && !usedTimeFreeze && (freeTime || extraTimeItems > 0), modifier = Modifier.weight(1f)) { Text("+15 sec") }
+                                    OutlinedButton(onClick = {
+                                        if (!revealed && !usedSkip && (freeSkip || skipItems > 0)) {
+                                            usedSkip = true
+                                            if (!freeSkip && skipItems > 0) skipItems-- else freeSkip = false
+                                            saveProgress()
+                                            hiddenChoices = emptySet()
+                                            selectedAnswer = -1
+                                            revealed = false
+                                            if (questionIndex + 1 < questions.size) questionIndex++ else finishQuiz()
+                                        }
+                                    }, enabled = !revealed && !usedSkip && (freeSkip || skipItems > 0), modifier = Modifier.weight(1f)) { Text("Skip") }
+                                }
                                 Text(q.text, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
 
                                 q.choices.forEachIndexed { idx, choice ->
@@ -736,6 +807,7 @@ private fun StudyMateApp() {
                                             hiddenChoices = emptySet()
                                             if (questionIndex + 1 < questions.size && lives > 0) {
                                                 questionIndex++
+                                                secondsLeft = 30
                                             } else {
                                                 finishQuiz()
                                             }
