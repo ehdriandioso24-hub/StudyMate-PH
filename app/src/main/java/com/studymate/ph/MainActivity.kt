@@ -45,7 +45,8 @@ private data class Question(
 private data class ReviewItem(
     val question: Question,
     val selected: Int,
-    val correct: Boolean
+    val correct: Boolean,
+    val level: Int = 1
 )
 
 private data class Flashcard(
@@ -105,6 +106,17 @@ private fun StudyMateApp() {
     var screen by rememberSaveable { mutableStateOf(Screen.HOME.name) }
     var level by remember {
         mutableIntStateOf(prefs.getInt("level", 1).coerceIn(1, 100))
+    }
+    val subjectLevels = remember {
+        mutableStateMapOf<String, Int>().apply {
+            listOf("Mixed", "Math", "Science", "English", "Filipino",
+                "Araling Panlipunan", "ICT", "PE & Health").forEach { subject ->
+                put(
+                    subject,
+                    prefs.getInt("level_$subject", prefs.getInt("level", 1)).coerceIn(1, 100)
+                )
+            }
+        }
     }
     var answered by remember {
         mutableIntStateOf(prefs.getInt("answered", 0))
@@ -188,8 +200,10 @@ private fun StudyMateApp() {
     var subjectInput by rememberSaveable { mutableStateOf("") }
 
     fun saveProgress() {
+        subjectLevels[selectedSubject] = level
         prefs.edit()
             .putInt("level", level)
+            .putInt("level_$selectedSubject", level)
             .putInt("answered", answered)
             .putInt("correct", correct)
             .putString("answeredIds", encodeStrings(answeredIds))
@@ -204,6 +218,9 @@ private fun StudyMateApp() {
 
     fun startQuiz(subject: String) {
         selectedSubject = subject
+        level = subjectLevels.getOrPut(subject) {
+            prefs.getInt("level_$subject", prefs.getInt("level", 1)).coerceIn(1, 100)
+        }
         questionIndex = 0
         selectedAnswer = -1
         revealed = false
@@ -279,7 +296,7 @@ private fun StudyMateApp() {
             streak = 0
         }
         answeredIds.add(q.id)
-        history.add(0, ReviewItem(q, selectedAnswer, isCorrect))
+        history.add(0, ReviewItem(q, selectedAnswer, isCorrect, level))
         while (history.size > 500) history.removeAt(history.lastIndex)
         saveProgress()
         if (lives <= 0) {
@@ -575,7 +592,7 @@ private fun StudyMateApp() {
                         ).forEach { name ->
                             CardBox(
                                 "${emoji(name)} $name",
-                                "Practice questions • Level $level"
+                                "Practice questions • Level ${subjectLevels[name] ?: prefs.getInt("level_$name", level)}"
                             ) {
                                 startQuiz(name)
                             }
@@ -595,7 +612,7 @@ private fun StudyMateApp() {
                         }
 
                         Text(
-                            "🎯 Current Level: $level / 100",
+                            "🎯 Current Level: ${subjectLevels[selectedSubject] ?: level} / 100",
                             color = muted,
                             fontWeight = FontWeight.SemiBold
                         )
@@ -988,46 +1005,101 @@ private fun StudyMateApp() {
                     Screen.REVIEW -> {
                         Heading(
                             "📚 Answer Review",
-                            "Review questions you have already answered."
+                            "Answers are grouped by subject, level, and result."
                         )
 
                         if (history.isEmpty()) {
                             Text("No answered questions yet.", color = muted)
-                        }
+                        } else {
+                            history
+                                .groupBy { it.question.subject }
+                                .toSortedMap(String.CASE_INSENSITIVE_ORDER)
+                                .forEach { (subjectName, subjectHistory) ->
+                                    Card(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        colors = CardDefaults.cardColors(
+                                            containerColor = colors.surface
+                                        )
+                                    ) {
+                                        Column(
+                                            Modifier.padding(14.dp),
+                                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                                        ) {
+                                            Text(
+                                                "📘 $subjectName",
+                                                fontWeight = FontWeight.ExtraBold,
+                                                style = MaterialTheme.typography.titleMedium,
+                                                color = colors.primary
+                                            )
 
-                        history.forEach { item ->
-                            Card(
-                                modifier = Modifier.fillMaxWidth(),
-                                colors = CardDefaults.cardColors(
-                                    containerColor = colors.surface
-                                )
-                            ) {
-                                Column(
-                                    Modifier.padding(14.dp),
-                                    verticalArrangement = Arrangement.spacedBy(5.dp)
-                                ) {
-                                    Text(
-                                        "${if (item.correct) "✓ Correct" else "✕ Incorrect"} • ${item.question.subject}",
-                                        color = colors.secondary,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                    Text(
-                                        item.question.text,
-                                        fontWeight = FontWeight.SemiBold
-                                    )
-                                    Text(
-                                        "Your answer: ${
-                                            item.question.choices.getOrElse(item.selected) { "—" }
-                                        }"
-                                    )
-                                    Text(
-                                        "Correct answer: ${
-                                            item.question.choices.getOrElse(item.question.answer) { "—" }
-                                        }"
-                                    )
-                                    Text(item.question.explanation, color = muted)
+                                            subjectHistory
+                                                .groupBy { it.level }
+                                                .toSortedMap()
+                                                .forEach { (reviewLevel, levelHistory) ->
+                                                    Divider()
+                                                    Text(
+                                                        "Level $reviewLevel",
+                                                        fontWeight = FontWeight.Bold,
+                                                        style = MaterialTheme.typography.titleSmall
+                                                    )
+
+                                                    listOf(
+                                                        true to "✓ Tama ang Sagot",
+                                                        false to "✕ Mali ang Sagot"
+                                                    ).forEach { (isCorrectGroup, heading) ->
+                                                        val resultItems = levelHistory.filter {
+                                                            it.correct == isCorrectGroup
+                                                        }
+                                                        Text(
+                                                            "$heading (${resultItems.size})",
+                                                            fontWeight = FontWeight.Bold,
+                                                            color = if (isCorrectGroup) Color(0xFF2E7D32) else Color(0xFFC62828)
+                                                        )
+
+                                                        if (resultItems.isEmpty()) {
+                                                            Text(
+                                                                "Wala pang mga tanong sa grupong ito.",
+                                                                color = muted
+                                                            )
+                                                        } else {
+                                                            resultItems.forEach { item ->
+                                                                Card(
+                                                                    modifier = Modifier.fillMaxWidth(),
+                                                                    colors = CardDefaults.cardColors(
+                                                                        containerColor = colors.background
+                                                                    )
+                                                                ) {
+                                                                    Column(
+                                                                        Modifier.padding(12.dp),
+                                                                        verticalArrangement = Arrangement.spacedBy(5.dp)
+                                                                    ) {
+                                                                        Text(
+                                                                            item.question.text,
+                                                                            fontWeight = FontWeight.SemiBold
+                                                                        )
+                                                                        Text(
+                                                                            "Sagot mo: ${
+                                                                                item.question.choices.getOrElse(item.selected) { "—" }
+                                                                            }"
+                                                                        )
+                                                                        Text(
+                                                                            "Tamang sagot: ${
+                                                                                item.question.choices.getOrElse(item.question.answer) { "—" }
+                                                                            }"
+                                                                        )
+                                                                        Text(
+                                                                            item.question.explanation,
+                                                                            color = muted
+                                                                        )
+                                                                    }
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                        }
+                                    }
                                 }
-                            }
                         }
                     }
 
@@ -1946,6 +2018,7 @@ private fun encodeHistory(history: List<ReviewItem>): String {
                 .put("question", encodeQuestion(it.question))
                 .put("selected", it.selected)
                 .put("correct", it.correct)
+                .put("level", it.level)
         )
     }
     return array.toString()
@@ -1955,10 +2028,17 @@ private fun decodeHistory(raw: String): List<ReviewItem> = runCatching {
     val array = JSONArray(raw)
     (0 until array.length()).map {
         val obj = array.getJSONObject(it)
+        val question = decodeQuestion(obj.getJSONObject("question"))
+        val levelFromQuestion = Regex("(?:-L|Level\\s+)(\\d+)", RegexOption.IGNORE_CASE)
+            .find(question.id)?.groupValues?.getOrNull(1)?.toIntOrNull()
+            ?: Regex("Level\\s+(\\d+)", RegexOption.IGNORE_CASE)
+                .find(question.text)?.groupValues?.getOrNull(1)?.toIntOrNull()
+            ?: 1
         ReviewItem(
-            decodeQuestion(obj.getJSONObject("question")),
+            question,
             obj.optInt("selected"),
-            obj.optBoolean("correct")
+            obj.optBoolean("correct"),
+            obj.optInt("level", levelFromQuestion).coerceIn(1, 100)
         )
     }
 }.getOrDefault(emptyList())
