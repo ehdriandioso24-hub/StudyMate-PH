@@ -4,6 +4,8 @@
     <application
         android:allowBackup="true"
         android:label="StudyMate PH"
+        android:icon="@drawable/ic_studymate_logo"
+        android:roundIcon="@drawable/ic_studymate_logo"
         android:theme="@style/Theme.StudyMate">
 
         <activity
