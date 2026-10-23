@@ -126,8 +126,8 @@ private fun StudyMateApp() {
     var correct by remember {
         mutableIntStateOf(prefs.getInt("correct", 0))
     }
-    var xp by remember {
-        mutableIntStateOf(prefs.getInt("xp", 0).coerceAtLeast(0))
+    var coins by remember {
+        mutableIntStateOf(prefs.getInt("coins", prefs.getInt("xp", 0)).coerceAtLeast(0))
     }
     var dailyStreak by remember {
         mutableIntStateOf(prefs.getInt("dailyStreak", 0).coerceAtLeast(0))
@@ -208,6 +208,10 @@ private fun StudyMateApp() {
     var used5050 by rememberSaveable { mutableStateOf(false) }
     var usedTimeFreeze by rememberSaveable { mutableStateOf(false) }
     var usedSkip by rememberSaveable { mutableStateOf(false) }
+    // Every new quiz grants one free use of each power-up; purchased inventory is additional.
+    var free5050 by rememberSaveable { mutableStateOf(false) }
+    var freeTime by rememberSaveable { mutableStateOf(false) }
+    var freeSkip by rememberSaveable { mutableStateOf(false) }
     var hiddenChoices by remember { mutableStateOf(setOf<Int>()) }
     var quizResultSaved by rememberSaveable { mutableStateOf(false) }
     var quizStartedAt by rememberSaveable { mutableLongStateOf(System.currentTimeMillis()) }
@@ -227,7 +231,8 @@ private fun StudyMateApp() {
             .putInt("level_$selectedSubject", level)
             .putInt("answered", answered)
             .putInt("correct", correct)
-            .putInt("xp", xp)
+            .putInt("coins", coins)
+            .putInt("xp", coins)
             .putInt("dailyStreak", dailyStreak)
             .putInt("item_5050", fiftyFiftyItems)
             .putInt("item_time", extraTimeItems)
@@ -245,10 +250,10 @@ private fun StudyMateApp() {
             .apply()
     }
 
-    fun claimDailyLoginXp() {
+    fun claimDailyLoginCoins() {
         val today = LocalDate.now().toString()
         if (dailyLoginClaimDate == today) return
-        xp += 25
+        coins += 25
         dailyLoginClaimDate = today
         saveProgress()
     }
@@ -260,8 +265,8 @@ private fun StudyMateApp() {
             "skip" -> 40
             else -> 0
         }
-        if (cost == 0 || xp < cost) return
-        xp -= cost
+        if (cost == 0 || coins < cost) return
+        coins -= cost
         when (type) {
             "5050" -> fiftyFiftyItems++
             "time" -> extraTimeItems++
@@ -286,6 +291,9 @@ private fun StudyMateApp() {
         used5050 = false
         usedTimeFreeze = false
         usedSkip = false
+        free5050 = true
+        freeTime = true
+        freeSkip = true
         hiddenChoices = emptySet()
         quizResultSaved = false
         quizStartedAt = System.currentTimeMillis()
@@ -313,6 +321,9 @@ private fun StudyMateApp() {
         used5050 = false
         usedTimeFreeze = false
         usedSkip = false
+        free5050 = true
+        freeTime = true
+        freeSkip = true
         hiddenChoices = emptySet()
         quizResultSaved = false
         quizStartedAt = System.currentTimeMillis()
@@ -347,7 +358,7 @@ private fun StudyMateApp() {
             val speedBonus = (secondsLeft * 2).coerceAtLeast(0)
             val comboBonus = if (streak >= 5) 100 else if (streak >= 3) 50 else 0
             quizScore += 100 + speedBonus + comboBonus
-            xp += 10 + (speedBonus / 2) + if (streak >= 5) 10 else 0
+            coins += 10 + (speedBonus / 2) + if (streak >= 5) 10 else 0
         } else {
             lives = (lives - 1).coerceAtLeast(0)
             streak = 0
@@ -376,7 +387,7 @@ private fun StudyMateApp() {
                     } else 1
                     lastStudyDate = today
                     dailyCompletedDate = today
-                    xp += 100
+                    coins += 100
                     saveProgress()
                 }
                 dailyChallengeActive = false
@@ -609,18 +620,18 @@ private fun StudyMateApp() {
                         val dailyDone = dailyCompletedDate == today
                         CardBox(
                             if (dailyDone) "✅ Daily Challenge Complete" else "🔥 Daily Challenge",
-                            if (dailyDone) "Come back tomorrow • ${dailyStreak}-day streak" else "10 mixed questions • +100 XP bonus • Current streak: $dailyStreak"
+                            if (dailyDone) "Come back tomorrow • ${dailyStreak}-day streak" else "10 mixed questions • +100 coins bonus • Current streak: $dailyStreak"
                         ) { if (!dailyDone) startQuiz("Mixed", daily = true) }
 
                         val loginClaimed = dailyLoginClaimDate == LocalDate.now().toString()
                         CardBox(
-                            if (loginClaimed) "✅ Daily Login XP Collected" else "🎁 Daily Login Reward",
-                            if (loginClaimed) "Come back tomorrow for another +25 XP" else "Collect +25 XP today • $xp XP available"
-                        ) { if (!loginClaimed) claimDailyLoginXp() }
+                            if (loginClaimed) "✅ Daily Login Coins Collected" else "🎁 Daily Login Reward",
+                            if (loginClaimed) "Come back tomorrow for another +25 coins" else "Collect +25 coins today • $coins coins available"
+                        ) { if (!loginClaimed) claimDailyLoginCoins() }
 
                         CardBox(
-                            "🛒 XP Shop",
-                            "Spend XP on 50:50, +15 sec, and Skip • $xp XP available"
+                            "🛒 Coin Shop",
+                            "Spend coins on 50:50, +15 sec, and Skip • $coins coins available"
                         ) { screen = Screen.SHOP.name }
 
                         CardBox(
@@ -772,7 +783,7 @@ private fun StudyMateApp() {
                             level = level,
                             answered = answered,
                             correct = correct,
-                            xp = xp,
+                            coins = coins,
                             dailyStreak = dailyStreak,
                             fiftyFifty = fiftyFiftyItems,
                             extraTime = extraTimeItems,
@@ -811,32 +822,32 @@ private fun StudyMateApp() {
                             }
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                                 OutlinedButton(onClick = {
-                                    if (!used5050 && !revealed && fiftyFiftyItems > 0) {
+                                    if (!used5050 && !revealed && (free5050 || fiftyFiftyItems > 0)) {
                                         used5050 = true
-                                        fiftyFiftyItems--
+                                        if (free5050) free5050 = false else fiftyFiftyItems--
                                         saveProgress()
                                         val wrong = q.choices.indices.filter { it != q.answer }.shuffled().take(2)
                                         hiddenChoices = wrong.toSet()
                                     }
-                                }, enabled = !used5050 && !revealed && fiftyFiftyItems > 0, modifier = Modifier.weight(1f)) { Text("50:50 ($fiftyFiftyItems)") }
+                                }, enabled = !used5050 && !revealed && (free5050 || fiftyFiftyItems > 0), modifier = Modifier.weight(1f)) { Text("50:50 ${if (free5050) "(FREE)" else "($fiftyFiftyItems)"}") }
                                 OutlinedButton(onClick = {
-                                    if (!usedTimeFreeze && !revealed && extraTimeItems > 0) {
+                                    if (!usedTimeFreeze && !revealed && (freeTime || extraTimeItems > 0)) {
                                         usedTimeFreeze = true
-                                        extraTimeItems--
+                                        if (freeTime) freeTime = false else extraTimeItems--
                                         secondsLeft += 15
                                         saveProgress()
                                     }
-                                }, enabled = !usedTimeFreeze && !revealed && extraTimeItems > 0, modifier = Modifier.weight(1f)) { Text("+15 sec ($extraTimeItems)") }
+                                }, enabled = !usedTimeFreeze && !revealed && (freeTime || extraTimeItems > 0), modifier = Modifier.weight(1f)) { Text("+15 sec ${if (freeTime) "(FREE)" else "($extraTimeItems)"}") }
                                 OutlinedButton(onClick = {
-                                    if (!usedSkip && !revealed && skipItems > 0) {
+                                    if (!usedSkip && !revealed && (freeSkip || skipItems > 0)) {
                                         usedSkip = true
-                                        skipItems--
+                                        if (freeSkip) freeSkip = false else skipItems--
                                         saveProgress()
                                         if (questionIndex >= questions.lastIndex) finishQuiz() else {
                                             questionIndex++; selectedAnswer = -1; revealed = false; secondsLeft = 30; hiddenChoices = emptySet()
                                         }
                                     }
-                                }, enabled = !usedSkip && !revealed && skipItems > 0, modifier = Modifier.weight(1f)) { Text("Skip ($skipItems)") }
+                                }, enabled = !usedSkip && !revealed && (freeSkip || skipItems > 0), modifier = Modifier.weight(1f)) { Text("Skip ${if (freeSkip) "(FREE)" else "($skipItems)"}") }
                             }
                         }
 
@@ -1203,7 +1214,7 @@ private fun StudyMateApp() {
 
                     Screen.SHOP -> {
                         ShopPage(
-                            xp = xp,
+                            coins = coins,
                             fiftyFifty = fiftyFiftyItems,
                             extraTime = extraTimeItems,
                             skip = skipItems,
@@ -1400,7 +1411,7 @@ private fun LoginPage(
 
 @Composable
 private fun ShopPage(
-    xp: Int,
+    coins: Int,
     fiftyFifty: Int,
     extraTime: Int,
     skip: Int,
@@ -1408,15 +1419,15 @@ private fun ShopPage(
     onBuyTime: () -> Unit,
     onBuySkip: () -> Unit
 ) {
-    Heading("🛒 XP Shop", "Use the XP you earn from correct answers and Daily Challenge rewards.")
-    CardBox("⭐ Your XP", "$xp XP available") {}
+    Heading("🛒 Coin Shop", "Spend coins to buy extra uses. Each new quiz also gives one FREE 50:50, +15 sec, and Skip.")
+    CardBox("🪙 Your Coins", "$coins coins available") {}
 
     ShopItem(
         title = "50:50",
         description = "Removes two wrong choices during a quiz.",
         cost = 50,
         owned = fiftyFifty,
-        canBuy = xp >= 50,
+        canBuy = coins >= 50,
         onBuy = onBuy5050
     )
     ShopItem(
@@ -1424,7 +1435,7 @@ private fun ShopPage(
         description = "Adds 15 seconds to the current question.",
         cost = 30,
         owned = extraTime,
-        canBuy = xp >= 30,
+        canBuy = coins >= 30,
         onBuy = onBuyTime
     )
     ShopItem(
@@ -1432,7 +1443,7 @@ private fun ShopPage(
         description = "Skip the current question without losing a life.",
         cost = 40,
         owned = skip,
-        canBuy = xp >= 40,
+        canBuy = coins >= 40,
         onBuy = onBuySkip
     )
 
@@ -1452,9 +1463,9 @@ private fun ShopItem(
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
             Text(description, color = muted)
-            Text("⭐ $cost XP • Owned: $owned", color = MaterialTheme.colorScheme.secondary)
+            Text("⭐ $cost coins • Owned: $owned", color = MaterialTheme.colorScheme.secondary)
             Button(onClick = onBuy, enabled = canBuy, modifier = Modifier.fillMaxWidth()) {
-                Text(if (canBuy) "Buy for $cost XP" else "Need $cost XP")
+                Text(if (canBuy) "Buy for $cost coins" else "Need $cost coins")
             }
         }
     }
@@ -1467,7 +1478,7 @@ private fun ProfilePage(
     level: Int,
     answered: Int,
     correct: Int,
-    xp: Int,
+    coins: Int,
     dailyStreak: Int,
     fiftyFifty: Int,
     extraTime: Int,
@@ -1504,8 +1515,8 @@ private fun ProfilePage(
     }
 
     CardBox("📚 Level", "$level / 100") {}
-    CardBox("⭐ XP", "$xp XP") {}
-    CardBox("🛒 XP Shop Inventory", "50:50: $fiftyFifty • +15 sec: $extraTime • Skip: $skip") {}
+    CardBox("🪙 Coins", "$coins coins") {}
+    CardBox("🛒 Coin Shop Inventory", "50:50: $fiftyFifty • +15 sec: $extraTime • Skip: $skip") {}
     CardBox("🔥 Daily streak", "$dailyStreak day(s)") {}
     CardBox("📝 Questions answered", "$answered") {}
     CardBox("🎯 Correct answers", "$correct") {}
