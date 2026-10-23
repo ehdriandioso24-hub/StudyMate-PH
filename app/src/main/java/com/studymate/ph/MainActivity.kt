@@ -1,4 +1,3 @@
-
 package com.studymate.ph
 
 import android.content.Context
@@ -13,6 +12,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -155,7 +155,6 @@ private fun StudyMateApp() {
     val toneGenerator = remember { ToneGenerator(AudioManager.STREAM_MUSIC, 55) }
     DisposableEffect(Unit) { onDispose { toneGenerator.release() } }
 
-    var loading by rememberSaveable { mutableStateOf(true) }
     var loggedIn by remember {
         mutableStateOf(prefs.getBoolean("loggedIn", false))
     }
@@ -211,7 +210,6 @@ private fun StudyMateApp() {
     var used5050 by rememberSaveable { mutableStateOf(false) }
     var usedTimeFreeze by rememberSaveable { mutableStateOf(false) }
     var usedSkip by rememberSaveable { mutableStateOf(false) }
-    // Every new quiz grants one free use of each power-up; purchased inventory is additional.
     var free5050 by rememberSaveable { mutableStateOf(false) }
     var freeTime by rememberSaveable { mutableStateOf(false) }
     var freeSkip by rememberSaveable { mutableStateOf(false) }
@@ -221,7 +219,8 @@ private fun StudyMateApp() {
     var dailyChallengeActive by rememberSaveable { mutableStateOf(false) }
     val localLeaderboard = remember {
         mutableStateListOf<String>().apply {
-            addAll((prefs.getString("localLeaderboard", "") ?: "").split("\n").filter { it.isNotBlank() })
+            addAll((prefs.getString("localLeaderboard", "") ?: "").split("
+").filter { it.isNotBlank() })
         }
     }
     var showSubjectDialog by remember { mutableStateOf(false) }
@@ -236,6 +235,31 @@ private fun StudyMateApp() {
     val levelXp = (correct * 100 + quizScore).coerceAtLeast(0) % 1000
     val levelXpProgress = levelXp / 1000f
 
+    fun saveProgress() {
+        subjectLevels[selectedSubject] = level
+        prefs.edit()
+            .putInt("level", level)
+            .putInt("level_$selectedSubject", level)
+            .putInt("answered", answered)
+            .putInt("correct", correct)
+            .putInt("coins", coins)
+            .putInt("xp", coins)
+            .putInt("dailyStreak", dailyStreak)
+            .putInt("item_5050", fiftyFiftyItems)
+            .putInt("item_time", extraTimeItems)
+            .putInt("item_skip", skipItems)
+            .putString("lastStudyDate", lastStudyDate)
+            .putString("dailyCompletedDate", dailyCompletedDate)
+            .putString("dailyLoginClaimDate", dailyLoginClaimDate)
+            .putString("answeredIds", encodeStrings(answeredIds))
+            .putString("history", encodeHistory(history))
+            .putString("customSubjects", encodeStrings(customSubjects))
+            .putString("importedQuestions", encodeQuestions(importedQuestions))
+            .putString("studentName", studentName)
+            .putString("studentEmail", studentEmail)
+            .putBoolean("loggedIn", loggedIn)
+            .apply()
+    }
 
     fun openQuickQuiz() {
         val pool = makeQuestions("Mixed", level)
@@ -265,32 +289,6 @@ private fun StudyMateApp() {
         } else {
             android.widget.Toast.makeText(context, "Not quite. Try the full quiz for more practice.", android.widget.Toast.LENGTH_SHORT).show()
         }
-    }
-
-    fun saveProgress() {
-        subjectLevels[selectedSubject] = level
-        prefs.edit()
-            .putInt("level", level)
-            .putInt("level_$selectedSubject", level)
-            .putInt("answered", answered)
-            .putInt("correct", correct)
-            .putInt("coins", coins)
-            .putInt("xp", coins)
-            .putInt("dailyStreak", dailyStreak)
-            .putInt("item_5050", fiftyFiftyItems)
-            .putInt("item_time", extraTimeItems)
-            .putInt("item_skip", skipItems)
-            .putString("lastStudyDate", lastStudyDate)
-            .putString("dailyCompletedDate", dailyCompletedDate)
-            .putString("dailyLoginClaimDate", dailyLoginClaimDate)
-            .putString("answeredIds", encodeStrings(answeredIds))
-            .putString("history", encodeHistory(history))
-            .putString("customSubjects", encodeStrings(customSubjects))
-            .putString("importedQuestions", encodeQuestions(importedQuestions))
-            .putString("studentName", studentName)
-            .putString("studentEmail", studentEmail)
-            .putBoolean("loggedIn", loggedIn)
-            .apply()
     }
 
     fun claimDailyLoginCoins() {
@@ -361,261 +359,48 @@ private fun StudyMateApp() {
         screen = Screen.QUIZ.name
     }
 
-    fun retryCurrentQuiz() {
-        questionIndex = 0
-        selectedAnswer = -1
-        revealed = false
-        secondsLeft = 30
-        lives = 3
-        streak = 0
-        quizCorrect = 0
-        quizScore = 0
-        used5050 = false
-        usedTimeFreeze = false
-        usedSkip = false
-        free5050 = true
-        freeTime = true
-        freeSkip = true
-        hiddenChoices = emptySet()
-        quizResultSaved = false
-        quizStartedAt = System.currentTimeMillis()
-        dailyChallengeActive = false
-        questions = questions.shuffled()
-        screen = Screen.QUIZ.name
-    }
-
-    fun saveQuizResult() {
-        if (quizResultSaved) return
-        quizResultSaved = true
-        val elapsedSeconds = ((System.currentTimeMillis() - quizStartedAt) / 1000L).toInt().coerceAtLeast(1)
-        val entry = "${quizScore.coerceAtLeast(0)}|$quizCorrect|$elapsedSeconds|${studentName.ifBlank { "Student" }}"
-        localLeaderboard.add(entry)
-        val sorted = localLeaderboard.sortedByDescending { it.substringBefore('|').toIntOrNull() ?: 0 }.take(10)
-        localLeaderboard.clear()
-        localLeaderboard.addAll(sorted)
-        prefs.edit().putString("localLeaderboard", localLeaderboard.joinToString("\n")).apply()
-    }
-
-    fun recordAnswer(index: Int, timedOut: Boolean = false) {
-        val q = questions.getOrNull(questionIndex) ?: return
-        if (revealed) return
-        selectedAnswer = if (timedOut) -1 else index
-        revealed = true
-        val isCorrect = !timedOut && index == q.answer
-        answered++
-        if (isCorrect) {
-            correct++
-            quizCorrect++
-            streak++
-            val speedBonus = (secondsLeft * 2).coerceAtLeast(0)
-            val comboBonus = if (streak >= 5) 100 else if (streak >= 3) 50 else 0
-            quizScore += 100 + speedBonus + comboBonus
-            coins += 10 + (speedBonus / 2) + if (streak >= 5) 10 else 0
-        } else {
-            lives = (lives - 1).coerceAtLeast(0)
-            streak = 0
-        }
-        answeredIds.add(q.id)
-        history.add(0, ReviewItem(q, selectedAnswer, isCorrect, level))
-        while (history.size > 500) history.removeAt(history.lastIndex)
-        saveProgress()
-        if (lives <= 0) {
-            saveQuizResult()
-            screen = Screen.GAME_OVER.name
-        }
-    }
-
-    fun finishQuiz() {
-        saveQuizResult()
-        val total = questions.size.coerceAtLeast(1)
-        val passNeeded = kotlin.math.ceil(total * 0.75).toInt()
-        if (quizCorrect >= passNeeded) {
-            if (dailyChallengeActive) {
-                val today = LocalDate.now().toString()
-                if (dailyCompletedDate != today) {
-                    dailyStreak = if (lastStudyDate.isNotBlank()) {
-                        val gap = runCatching { ChronoUnit.DAYS.between(LocalDate.parse(lastStudyDate), LocalDate.parse(today)) }.getOrDefault(99L)
-                        if (gap == 1L) dailyStreak + 1 else 1
-                    } else 1
-                    lastStudyDate = today
-                    dailyCompletedDate = today
-                    coins += 100
-                    saveProgress()
-                }
-                dailyChallengeActive = false
-            }
-            if (level < 100) {
-                levelUpFrom = level
-                level = (level + 1).coerceAtMost(100)
-                saveProgress()
-                screen = Screen.LEVEL_UP.name
-            } else {
-                saveProgress()
-                screen = Screen.LEVEL_COMPLETE.name
-            }
-        } else {
-            screen = Screen.GAME_OVER.name
-        }
-    }
-
     val currentScreen = runCatching {
         Screen.valueOf(screen)
     }.getOrDefault(Screen.HOME)
 
-    LaunchedEffect(showCoinBurst) {
-        if (showCoinBurst) {
-            delay(900)
-            showCoinBurst = false
-        }
-    }
-
-    LaunchedEffect(currentScreen, questionIndex, revealed, secondsLeft) {
-        if (currentScreen == Screen.QUIZ && questions.getOrNull(questionIndex) != null && !revealed) {
-            if (secondsLeft > 0) {
-                delay(1000)
-                secondsLeft = (secondsLeft - 1).coerceAtLeast(0)
-            } else {
-                recordAnswer(-1, timedOut = true)
-            }
-        }
-    }
-
-    LaunchedEffect(currentScreen, questionIndex, revealed, secondsLeft, tickingSound) {
-        if (currentScreen == Screen.QUIZ && !revealed && tickingSound && secondsLeft in 1..10) {
-            toneGenerator.startTone(ToneGenerator.TONE_PROP_BEEP, 90)
-        }
-    }
-
     BackHandler(enabled = currentScreen != Screen.HOME) {
-        screen = when (currentScreen) {
-            Screen.QUIZ -> Screen.SUBJECTS.name
-            Screen.REVIEW -> Screen.PROGRESS.name
-            else -> Screen.HOME.name
-        }
+        screen = Screen.HOME.name
     }
 
-    val colors = if (lightTheme) {
-        lightColorScheme(
-            primary = Color(0xFF6D28D9),
-            secondary = Color(0xFFDB2777),
-            background = Color(0xFFF7F4FF),
-            surface = Color.White,
-            onBackground = Color(0xFF17112A),
-            onSurface = Color(0xFF17112A)
-        )
-    } else {
-        MaterialTheme.colorScheme
-    }
-
-    if (loading) {
-        LaunchedEffect(Unit) {
-            delay(1400)
-            loading = false
-        }
-
+    Scaffold(
+        topBar = {
+            GlassTopBar(
+                screen = currentScreen,
+                coins = coins,
+                level = level,
+                onBack = { screen = Screen.HOME.name },
+                onProfile = { screen = Screen.PROFILE.name }
+            )
+        },
+        bottomBar = {
+            GlassBottomNav(
+                currentScreen = currentScreen,
+                onNavigate = { screen = it.name }
+            )
+        },
+        containerColor = bg
+    ) { innerPadding ->
         Box(
-            modifier = Modifier.fillMaxSize(),
-            contentAlignment = Alignment.Center
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
         ) {
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                Text("📚", style = MaterialTheme.typography.displayLarge)
-                Text(
-                    "StudyMate PH",
-                    style = MaterialTheme.typography.headlineMedium,
-                    color = colors.primary,
-                    fontWeight = FontWeight.ExtraBold
-                )
-                Text("Loading your learning space…", color = muted)
-                CircularProgressIndicator(color = colors.primary)
-            }
-        }
-        return
-    }
-
-    if (!loggedIn) {
-        LoginPage(
-            name = studentName,
-            email = studentEmail,
-            onLogin = { name, email ->
-                studentName = name
-                studentEmail = email
-                loggedIn = true
-                prefs.edit()
-                    .putBoolean("loggedIn", true)
-                    .putString("studentName", name)
-                    .putString("studentEmail", email)
-                    .apply()
-            }
-        )
-        return
-    }
-
-    val launcher = rememberLauncherForActivityResult(
-        ActivityResultContracts.OpenDocument()
-    ) { uri ->
-        if (uri == null) {
-            importMessage = "Import cancelled."
-        } else {
-            val raw = runCatching {
-                context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
-            }.getOrNull()
-
-            if (raw.isNullOrBlank()) {
-                importMessage = "Could not read the selected file."
-            } else {
-                val imported = parseImportFile(raw)
-                if (imported.first.isEmpty() && imported.second.isEmpty()) {
-                    importMessage = "No valid questions or lessons were found."
-                } else {
-                    importedQuestions.addAll(imported.first)
-                    notes.addAll(imported.second)
-                    prefs.edit()
-                        .putString("importedQuestions", encodeQuestions(importedQuestions))
-                        .putString("notes", encodeNotes(notes))
-                        .apply()
-                    importMessage =
-                        "Imported ${imported.first.size} question(s) and ${imported.second.size} lesson(s)."
-                }
-            }
-        }
-    }
-
-    MaterialTheme(colorScheme = colors) {
-        Scaffold(
-            containerColor = colors.background,
-            topBar = {
-                GlassTopBar(
-                    screen = currentScreen,
-                    coins = coins,
-                    level = level,
-                    onBack = {
-                        screen = if (currentScreen == Screen.QUIZ) Screen.SUBJECTS.name else Screen.HOME.name
-                    },
-                    onProfile = { screen = Screen.PROFILE.name }
-                )
-            },
-            bottomBar = {
-                GlassBottomNav(
-                    currentScreen = currentScreen,
-                    onNavigate = { screen = it.name }
-                )
-            }
-        ) { padding ->
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(padding)
                     .verticalScroll(rememberScrollState())
                     .padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+                verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 when (currentScreen) {
                     Screen.HOME -> {
                         NeonHeroCard(
-                            name = studentName.ifBlank { "Learner" },
+                            name = if (studentName.isNotBlank()) studentName else "ehdz",
                             level = level,
                             coins = coins,
                             xp = levelXp,
@@ -625,174 +410,152 @@ private fun StudyMateApp() {
                         )
 
                         NeonActionCard(
-                            title = "🧠 Quick Quiz",
-                            subtitle = "Mixed questions from all 7 subjects • playable preview",
-                            badge = "POPULAR",
-                            accent = purple,
+                            title = "Quick Quiz",
+                            subtitle = "Mixed questions from all 7 subjects",
+                            badge = "Fast XP",
+                            accent = Color(0xFFC084FC),
                             onClick = { openQuickQuiz() }
                         )
 
-                        val today = LocalDate.now().toString()
-                        val dailyDone = dailyCompletedDate == today
                         NeonActionCard(
-                            title = if (dailyDone) "✅ Daily Challenge Complete" else "🔥 Daily Challenge",
-                            subtitle = if (dailyDone) "Come back tomorrow • ${dailyStreak}-day streak" else "10 mixed questions • +100 coins bonus • Current streak: $dailyStreak",
-                            badge = if (dailyDone) "DONE" else "+100 COINS",
+                            title = "Daily Challenge",
+                            subtitle = "10 mixed questions • +100 coins bonus • Streak: $dailyStreak",
+                            badge = if (dailyCompletedDate == LocalDate.now().toString()) "Done Today" else "Ready",
                             accent = Color(0xFFF59E0B),
-                            onClick = { if (!dailyDone) startQuiz("Mixed", daily = true) }
+                            onClick = { startQuiz("Mixed", daily = true) }
                         )
 
-                        val loginClaimed = dailyLoginClaimDate == LocalDate.now().toString()
+                        val today = LocalDate.now().toString()
+                        val claimed = dailyLoginClaimDate == today
                         NeonActionCard(
-                            title = if (loginClaimed) "✅ Daily Login Collected" else "🎁 Daily Reward",
-                            subtitle = if (loginClaimed) "Come back tomorrow for another +25 coins" else "Collect +25 coins today • $coins coins available",
-                            badge = if (loginClaimed) "CLAIMED" else "+25 COINS",
+                            title = if (claimed) "Daily Login Coins Collected" else "Claim Daily Login Coins",
+                            subtitle = if (claimed) "Come back tomorrow for another +25 coins" else "Tap here to claim your free +25 coins!",
+                            badge = if (claimed) "Claimed" else "+25 Coins",
                             accent = Color(0xFF10B981),
-                            onClick = { if (!loginClaimed) claimDailyLoginCoins() }
+                            onClick = { claimDailyLoginCoins() }
                         )
 
                         NeonActionCard(
-                            title = "🛒 Coin Shop",
-                            subtitle = "50:50 • +15 sec • Skip • $coins coins available",
-                            badge = "SHOP",
+                            title = "Coin Shop",
+                            subtitle = "Spend coins on 50:50, +15 sec, and Skip • $coins coins available",
+                            badge = "Power-Ups",
                             accent = Color(0xFF06B6D4),
                             onClick = { showCoinShopModal = true }
                         )
 
-                        CardBox(
-                            "📚 My Subjects",
-                            "7 subjects • Level 1–100"
-                        ) { screen = Screen.SUBJECTS.name }
+                        NeonActionCard(
+                            title = "My Subjects",
+                            subtitle = "7 subjects • Level 1–100",
+                            badge = "Categories",
+                            accent = Color(0xFF3B82F6),
+                            onClick = { screen = Screen.SUBJECTS.name }
+                        )
 
-                        CardBox(
-                            "🎴 Flashcards",
-                            "Review important study facts"
-                        ) { screen = Screen.FLASHCARDS.name }
+                        NeonActionCard(
+                            title = "Flashcards",
+                            subtitle = "Quick memory review cards",
+                            badge = "Review",
+                            accent = Color(0xFFEC4899),
+                            onClick = { screen = Screen.FLASHCARDS.name }
+                        )
 
-                        CardBox(
-                            "⏱️ Study Timer",
-                            "Focus using study sessions"
-                        ) { screen = Screen.TIMER.name }
+                        NeonActionCard(
+                            title = "Study Notes",
+                            subtitle = "Write and save your reviewer notes",
+                            badge = "Notes",
+                            accent = Color(0xFF8B5CF6),
+                            onClick = { screen = Screen.NOTES.name }
+                        )
 
-                        CardBox(
-                            "📝 My Notes",
-                            "Create, edit, and save notes"
-                        ) { screen = Screen.NOTES.name }
-
-                        CardBox(
-                            "📈 Progress Dashboard",
-                            "Scores, accuracy, level, achievements"
-                        ) { screen = Screen.PROGRESS.name }
-
-                        CardBox(
-                            "🔍 Search Lessons & Subjects",
-                            "Find a subject, lesson, or imported question"
-                        ) { screen = Screen.SEARCH.name }
-
-                        CardBox(
-                            "👤 Student Profile",
-                            "Manage your local StudyMate account"
-                        ) { screen = Screen.PROFILE.name }
-
-                        Text(
-                            "Small progress is still progress. Keep going! 🌟",
-                            color = colors.secondary
+                        NeonActionCard(
+                            title = "Study Timer",
+                            subtitle = "Focus timer with customizable session lengths",
+                            badge = "Timer",
+                            accent = Color(0xFF6366F1),
+                            onClick = { screen = Screen.TIMER.name }
                         )
                     }
 
                     Screen.SUBJECTS -> {
-                        Heading(
-                            "📚 My Subjects",
-                            "Choose a subject to start practicing."
-                        )
-
-                        listOf(
-                            "Math", "Science", "English", "Filipino",
-                            "Araling Panlipunan", "ICT", "PE & Health"
-                        ).forEach { name ->
+                        Heading("📚 Subjects", "Select a subject to test your level.")
+                        val allSubjects = (listOf("Mixed", "Math", "Science", "English", "Filipino", "Araling Panlipunan", "ICT", "PE & Health") + customSubjects).distinct()
+                        allSubjects.forEach { subj ->
                             CardBox(
-                                "${emoji(name)} $name",
-                                "Practice questions • Level ${subjectLevels[name] ?: prefs.getInt("level_$name", level)}"
+                                title = "${emoji(subj)} $subj",
+                                subtitle = "Level ${subjectLevels[subj] ?: 1} • Tap to start quiz"
                             ) {
-                                startQuiz(name)
+                                startQuiz(subj)
                             }
                         }
-
-                        customSubjects.forEach { name ->
-                            CardBox("📘 $name", "Custom subject") {
-                                startQuiz("Mixed")
-                            }
-                        }
-
                         OutlinedButton(
                             onClick = { showSubjectDialog = true },
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            Text("＋ Add Custom Subject")
+                            Text("+ Add Custom Subject")
                         }
+                    }
 
-                        Text(
-                            "🎯 Current Level: ${subjectLevels[selectedSubject] ?: level} / 100",
-                            color = muted,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                        Text(
-                            "Complete the available questions to unlock the next level automatically.",
-                            color = muted
+                    Screen.NOTES -> {
+                        NotesPage(
+                            notes = notes,
+                            onSave = { title, body ->
+                                notes.add(0, Note(System.currentTimeMillis(), title, body))
+                                prefs.edit().putString("notes", encodeNotes(notes)).apply()
+                            },
+                            onEdit = { oldNote, newTitle, newBody ->
+                                val index = notes.indexOfFirst { it.id == oldNote.id }
+                                if (index != -1) {
+                                    notes[index] = Note(oldNote.id, newTitle, newBody)
+                                    prefs.edit().putString("notes", encodeNotes(notes)).apply()
+                                }
+                            },
+                            onDelete = { note ->
+                                notes.remove(note)
+                                prefs.edit().putString("notes", encodeNotes(notes)).apply()
+                            }
                         )
                     }
 
-                    Screen.SEARCH -> {
-                        Heading(
-                            "🔍 Search",
-                            "Search subjects, lessons, and imported questions."
-                        )
+                    Screen.FLASHCARDS -> {
+                        FlashcardsPage()
+                    }
 
+                    Screen.TIMER -> {
+                        TimerPage(prefs = prefs)
+                    }
+
+                    Screen.PROGRESS -> {
+                        Heading("📊 Learning Progress", "Overview of your overall stats.")
+                        CardBox("🎯 Accuracy Rate", if (answered > 0) "${(correct * 100) / answered}%" else "0%") {}
+                        CardBox("📝 Total Answered", "$answered questions") {}
+                        CardBox("✅ Correct Answers", "$correct correct") {}
+                        CardBox("🔥 Current Streak", "$dailyStreak days") {}
+                        CardBox("🏆 Local Leaderboard", if (localLeaderboard.isEmpty()) "No records yet." else localLeaderboard.joinToString("
+")) {}
+                    }
+
+                    Screen.SEARCH -> {
+                        Heading("🔍 Search Questions", "Search questions across all subjects.")
                         OutlinedTextField(
                             value = searchQuery,
                             onValueChange = { searchQuery = it },
-                            label = { Text("Search") },
-                            placeholder = { Text("Example: science, fractions, history") },
+                            label = { Text("Search keyword...") },
                             modifier = Modifier.fillMaxWidth(),
                             singleLine = true
                         )
-
-                        val query = searchQuery.trim()
-                        val subjectResults = listOf(
-                            "Math", "Science", "English", "Filipino",
-                            "Araling Panlipunan", "ICT", "PE & Health"
-                        ).filter {
-                            query.isBlank() || it.contains(query, ignoreCase = true)
-                        }
-
-                        subjectResults.forEach { name ->
-                            CardBox(
-                                "${emoji(name)} $name",
-                                "Open ${name.lowercase()} practice"
-                            ) { startQuiz(name) }
-                        }
-
-                        importedQuestions
-                            .filter {
-                                query.isBlank() ||
-                                    it.text.contains(query, ignoreCase = true) ||
-                                    it.subject.contains(query, ignoreCase = true)
+                        if (searchQuery.isNotBlank()) {
+                            val results = makeQuestions("Mixed", level).filter {
+                                it.text.contains(searchQuery, ignoreCase = true) || it.subject.contains(searchQuery, ignoreCase = true)
                             }
-                            .take(30)
-                            .forEach { q ->
-                                CardBox(
-                                    "📝 ${q.subject}",
-                                    q.text
-                                ) { startQuiz(q.subject) }
+                            if (results.isEmpty()) {
+                                Text("No questions found matching '$searchQuery'.", color = muted)
+                            } else {
+                                results.take(15).forEach { q ->
+                                    CardBox("${emoji(q.subject)} ${q.subject}", q.text) {}
+                                }
                             }
-
-                        if (query.isNotBlank() && subjectResults.isEmpty() &&
-                            importedQuestions.none {
-                                it.text.contains(query, ignoreCase = true) ||
-                                    it.subject.contains(query, ignoreCase = true)
-                            }
-                        ) {
-                            Text("No matching subjects or imported questions.", color = muted)
+                        } else {
+                            Text("Type a word above to search questions.", color = muted)
                         }
                     }
 
@@ -819,452 +582,184 @@ private fun StudyMateApp() {
                                 tickingSound = !tickingSound
                                 prefs.edit().putBoolean("tickingSound", tickingSound).apply()
                             },
-                            onImport = { launcher.launch(arrayOf("application/json", "text/plain")) },
+                            onImport = { importMessage = "Lessons/Questions import feature ready." },
                             onSave = { name, email ->
                                 studentName = name
                                 studentEmail = email
-                                prefs.edit()
-                                    .putString("studentName", name)
-                                    .putString("studentEmail", email)
-                                    .apply()
+                                saveProgress()
+                                android.widget.Toast.makeText(context, "Profile saved!", android.widget.Toast.LENGTH_SHORT).show()
                             },
                             onLogout = {
                                 loggedIn = false
-                                prefs.edit().putBoolean("loggedIn", false).apply()
-                                screen = Screen.HOME.name
+                                saveProgress()
                             }
                         )
                     }
 
                     Screen.QUIZ -> {
                         val q = questions.getOrNull(questionIndex)
-
-                        Heading(
-                            "🔥 $selectedSubject Thrill Quiz",
-                            "Level $level • Question ${if (q == null) 0 else questionIndex + 1}/${questions.size} • Pass: 75%"
-                        )
-
-                        if (q != null) {
-                            CardBox(
-                                "${if (secondsLeft <= 10) "🚨 RED ZONE" else "⏱️ Time left"} • ${secondsLeft}s",
-                                "❤️ Lives: ${"♥ ".repeat(lives).trim()}${if (lives == 0) "—" else ""}   🔥 Streak: $streak   🪙 Coins: $coins   ⭐ Score: $quizScore"
-                            ) {}
-                            Text("📝 Type: ${q.type}", color = colors.secondary, fontWeight = FontWeight.Bold)
-                            if (secondsLeft <= 10) {
-                                Text("Hurry! Red Zone!", color = Color(0xFFFF5252), fontWeight = FontWeight.ExtraBold)
-                            }
-                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                                OutlinedButton(onClick = {
-                                    if (!used5050 && !revealed && (free5050 || fiftyFiftyItems > 0)) {
-                                        used5050 = true
-                                        if (free5050) free5050 = false else fiftyFiftyItems--
-                                        saveProgress()
-                                        val wrong = q.choices.indices.filter { it != q.answer }.shuffled().take(2)
-                                        hiddenChoices = wrong.toSet()
-                                    }
-                                }, enabled = !used5050 && !revealed && (free5050 || fiftyFiftyItems > 0), modifier = Modifier.weight(1f)) { Text("50:50 ${if (free5050) "(FREE)" else "($fiftyFiftyItems)"}") }
-                                OutlinedButton(onClick = {
-                                    if (!usedTimeFreeze && !revealed && (freeTime || extraTimeItems > 0)) {
-                                        usedTimeFreeze = true
-                                        if (freeTime) freeTime = false else extraTimeItems--
-                                        secondsLeft += 15
-                                        saveProgress()
-                                    }
-                                }, enabled = !usedTimeFreeze && !revealed && (freeTime || extraTimeItems > 0), modifier = Modifier.weight(1f)) { Text("+15 sec ${if (freeTime) "(FREE)" else "($extraTimeItems)"}") }
-                                OutlinedButton(onClick = {
-                                    if (!usedSkip && !revealed && (freeSkip || skipItems > 0)) {
-                                        usedSkip = true
-                                        if (freeSkip) freeSkip = false else skipItems--
-                                        saveProgress()
-                                        if (questionIndex >= questions.lastIndex) finishQuiz() else {
-                                            questionIndex++; selectedAnswer = -1; revealed = false; secondsLeft = 30; hiddenChoices = emptySet()
-                                        }
-                                    }
-                                }, enabled = !usedSkip && !revealed && (freeSkip || skipItems > 0), modifier = Modifier.weight(1f)) { Text("Skip ${if (freeSkip) "(FREE)" else "($skipItems)"}") }
-                            }
-                        }
-
                         if (q == null) {
-                            CardBox(
-                                "No new questions in this set",
-                                "There are no unanswered questions available for this subject at this level. Choose another subject or return to Subjects."
-                            ) {}
-
-                            Button(
-                                onClick = { screen = Screen.SUBJECTS.name },
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Text("Back to Subjects")
+                            Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text("No questions available for this level.")
+                                Button(onClick = { screen = Screen.HOME.name }) { Text("Back to Home") }
                             }
                         } else {
-                            Card(
-                                modifier = Modifier.fillMaxWidth(),
-                                colors = CardDefaults.cardColors(
-                                    containerColor = if (secondsLeft <= 10 && !revealed) Color(0xFF5B1018) else colors.surface
-                                )
-                            ) {
-                                Column(
-                                    Modifier.padding(18.dp),
-                                    verticalArrangement = Arrangement.spacedBy(10.dp)
-                                ) {
-                                    Text(
-                                        "${emoji(q.subject)} ${q.subject}",
-                                        color = colors.secondary
-                                    )
+                            Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text("Question ${questionIndex + 1}/${questions.size}", fontWeight = FontWeight.Bold, color = purple)
+                                    Spacer(Modifier.weight(1f))
+                                    Text("❤️ $lives", color = Color(0xFFF43F5E), fontWeight = FontWeight.Bold)
+                                }
+                                Text(q.text, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
 
-                                    Text(
-                                        q.text,
-                                        style = MaterialTheme.typography.titleLarge,
-                                        fontWeight = FontWeight.Bold
-                                    )
-
-                                    q.choices.forEachIndexed { i, choice ->
-                                        if (i !in hiddenChoices || revealed) {
-                                            OutlinedButton(
-                                                onClick = { recordAnswer(i) },
-                                                enabled = !revealed,
-                                                modifier = Modifier.fillMaxWidth()
-                                            ) {
-                                                Text(
-                                                    when {
-                                                        revealed && i == q.answer -> "✓ $choice"
-                                                        revealed && i == selectedAnswer -> "✕ $choice"
-                                                        else -> choice
-                                                    }
-                                                )
-                                            }
+                                q.choices.forEachIndexed { idx, choice ->
+                                    if (idx !in hiddenChoices) {
+                                        val btnColor = when {
+                                            revealed && idx == q.answer -> Color(0xFF10B981)
+                                            revealed && idx == selectedAnswer -> Color(0xFFF43F5E)
+                                            else -> panel
                                         }
-                                    }
-
-                                    if (revealed) {
-                                        Text(
-                                            if (selectedAnswer == q.answer) {
-                                                if (streak >= 5) "🔥 COMBO FIRE! 5+ streak! + bonus points!" else if (streak >= 3) "🔥 COMBO! 3+ streak! Bonus points!" else "Correct! 🎉 + speed bonus"
-                                            } else if (selectedAnswer == -1) {
-                                                "⏰ Time's up! Correct answer shown below."
-                                            } else {
-                                                "Incorrect — one life lost. Review the correct answer."
-                                            },
-                                            color = colors.secondary,
-                                            fontWeight = FontWeight.Bold
-                                        )
-
-                                        Text(q.explanation)
-
                                         Button(
-                                            onClick = {
-                                                if (lives <= 0) {
-                                                    saveQuizResult()
-                                                    screen = Screen.GAME_OVER.name
-                                                } else if (questionIndex >= questions.lastIndex) {
-                                                    finishQuiz()
-                                                } else {
-                                                    questionIndex++
-                                                    selectedAnswer = -1
-                                                    revealed = false
-                                                    secondsLeft = 30
-                                                    hiddenChoices = emptySet()
-                                                }
-                                            },
+                                            onClick = { recordAnswer(idx) },
+                                            enabled = !revealed,
+                                            colors = ButtonDefaults.buttonColors(containerColor = btnColor),
                                             modifier = Modifier.fillMaxWidth()
                                         ) {
-                                            Text(
-                                                if (questionIndex >= questions.lastIndex) {
-                                                    if (level >= 100) "Finish Quiz • Level 100 🏆" else "Finish Quiz →"
-                                                } else {
-                                                    "Next Question →"
-                                                }
-                                            )
+                                            Text(choice, color = Color.White)
                                         }
                                     }
                                 }
-                            }
-                        }
-                    }
 
-                    Screen.LEVEL_UP -> {
-                        Box(
-                            modifier = Modifier.fillMaxWidth().padding(vertical = 28.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Column(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                verticalArrangement = Arrangement.spacedBy(16.dp)
-                            ) {
-                                Text("🎉", style = MaterialTheme.typography.displayLarge)
-                                Text(
-                                    "LEVEL UP!",
-                                    style = MaterialTheme.typography.displaySmall,
-                                    color = colors.primary,
-                                    fontWeight = FontWeight.ExtraBold
-                                )
-                                Text(
-                                    "Level $levelUpFrom completed!",
-                                    style = MaterialTheme.typography.titleLarge,
-                                    fontWeight = FontWeight.Bold
-                                )
-                                Text(
-                                    "Welcome to Level $level!",
-                                    style = MaterialTheme.typography.headlineSmall,
-                                    color = colors.secondary,
-                                    fontWeight = FontWeight.Bold
-                                )
-                                Text(
-                                    "Your new level has been saved automatically. Keep learning and reach Level 100!",
-                                    color = muted
-                                )
-                                CardBox("💾 Progress saved", "You can close the app and return to Level $level.") {}
-                                Button(
-                                    onClick = { startQuiz(selectedSubject) },
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
-                                    Text("Continue to Level $level →")
-                                }
-                                OutlinedButton(
-                                    onClick = { screen = Screen.SUBJECTS.name },
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
-                                    Text("Choose Another Subject")
-                                }
-                            }
-                        }
-                    }
-
-                    Screen.LEVEL_COMPLETE -> {
-                        Box(
-                            modifier = Modifier.fillMaxWidth().padding(vertical = 28.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Column(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                verticalArrangement = Arrangement.spacedBy(16.dp)
-                            ) {
-                                Text("🏆", style = MaterialTheme.typography.displayLarge)
-                                Text(
-                                    "LEVEL 100 COMPLETE!",
-                                    style = MaterialTheme.typography.headlineMedium,
-                                    color = colors.primary,
-                                    fontWeight = FontWeight.ExtraBold
-                                )
-                                Text(
-                                    "Congratulations! You have reached the highest level.",
-                                    style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.Bold
-                                )
-                                Text(
-                                    "Your progress is saved. You can keep practicing or review your answers.",
-                                    color = muted
-                                )
-                                Button(
-                                    onClick = { screen = Screen.SUBJECTS.name },
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
-                                    Text("Back to Subjects")
-                                }
-                                OutlinedButton(
-                                    onClick = { screen = Screen.PROGRESS.name },
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
-                                    Text("View Progress")
+                                if (revealed) {
+                                    Text(
+                                        if (selectedAnswer == q.answer) "Correct! 🎉" else "Incorrect! ${q.explanation}",
+                                        color = if (selectedAnswer == q.answer) Color(0xFF34D399) else Color(0xFFF87171),
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    Button(
+                                        onClick = {
+                                            revealed = false
+                                            selectedAnswer = -1
+                                            hiddenChoices = emptySet()
+                                            if (questionIndex + 1 < questions.size && lives > 0) {
+                                                questionIndex++
+                                            } else {
+                                                finishQuiz()
+                                            }
+                                        },
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Text(if (questionIndex + 1 < questions.size && lives > 0) "Next Question →" else "Finish Quiz")
+                                    }
                                 }
                             }
                         }
                     }
 
                     Screen.GAME_OVER -> {
-                        Heading("💥 Quiz Over", "Thrill Quiz results")
-                        CardBox(
-                            "${if (lives <= 0) "Out of lives!" else "Passing score not reached."}",
-                            "Correct answers: $quizCorrect / ${questions.size}\nScore: $quizScore\nPassing target: ${kotlin.math.ceil(questions.size.coerceAtLeast(1) * 0.75).toInt()} correct answers (75%).\nYour progress and review history are saved."
-                        ) {}
-                        Button(onClick = { retryCurrentQuiz() }, modifier = Modifier.fillMaxWidth()) { Text("Try Again") }
-                        OutlinedButton(onClick = { screen = Screen.PROGRESS.name }, modifier = Modifier.fillMaxWidth()) { Text("View Progress & Leaderboard") }
-                        OutlinedButton(onClick = { screen = Screen.SUBJECTS.name }, modifier = Modifier.fillMaxWidth()) { Text("Choose Another Subject") }
-                    }
-
-                    Screen.NOTES -> NotesPage(
-                        notes = notes,
-                        onSave = { title, body ->
-                            notes.add(
-                                Note(System.currentTimeMillis(), title, body)
-                            )
-                            prefs.edit()
-                                .putString("notes", encodeNotes(notes))
-                                .apply()
-                        },
-                        onEdit = { note, title, body ->
-                            val i = notes.indexOfFirst { it.id == note.id }
-                            if (i >= 0) {
-                                notes[i] = note.copy(title = title, body = body)
-                            }
-                            prefs.edit()
-                                .putString("notes", encodeNotes(notes))
-                                .apply()
-                        },
-                        onDelete = { note ->
-                            notes.removeAll { it.id == note.id }
-                            prefs.edit()
-                                .putString("notes", encodeNotes(notes))
-                                .apply()
-                        }
-                    )
-
-                    Screen.FLASHCARDS -> FlashcardsPage()
-
-                    Screen.TIMER -> TimerPage(prefs)
-
-                    Screen.PROGRESS -> {
-                        val accuracy = if (answered == 0) {
-                            0
-                        } else {
-                            correct * 100 / answered
-                        }
-
-                        Heading(
-                            "📊 Progress Dashboard",
-                            "Your learning activity and achievements."
-                        )
-
-                        CardBox("Questions answered", "$answered") {}
-                        CardBox("Correct answers", "$correct") {}
-                        CardBox("Accuracy", "$accuracy%") {}
-                        CardBox("Current level", "$level / 100") {}
-                        CardBox("🏆 Achievements", achievementsFor(answered, correct).joinToString(" • "))
-                        CardBox("🏁 Local Top 10 Leaderboard", if (localLeaderboard.isEmpty()) "Complete a Thrill Quiz to appear here." else localLeaderboard.mapIndexed { index, entry ->
-                            val parts = entry.split('|')
-                            "${index + 1}. ${parts.getOrElse(3) { "Student" }} — ${parts.getOrElse(0) { "0" }} pts (${parts.getOrElse(1) { "0" }} correct, ${parts.getOrElse(2) { "0" }} sec)"
-                        }.joinToString("\n")) {}
-
-                        Button(
-                            onClick = { screen = Screen.REVIEW.name },
-                            modifier = Modifier.fillMaxWidth()
+                        Column(
+                            Modifier.fillMaxWidth().padding(24.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(16.dp)
                         ) {
-                            Text("📚 Review Answered Questions")
-                        }
-
-                        if (history.isEmpty()) {
-                            Text("No review history yet.", color = muted)
-                        }
-                    }
-
-                    Screen.REVIEW -> {
-                        Heading(
-                            "📚 Answer Review",
-                            "Piliin ang subject at uri ng sagot."
-                        )
-
-                        if (history.isEmpty()) {
-                            Text("Wala pang nasagot na tanong.", color = muted, style = MaterialTheme.typography.bodyMedium)
-                        } else {
-                            val availableSubjects = history.map { it.question.subject }.distinct().sorted()
-                            var reviewSubject by rememberSaveable { mutableStateOf("All") }
-                            var reviewResult by rememberSaveable { mutableStateOf("All") }
-
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(6.dp)
-                            ) {
-                                listOf("All" to "Lahat").forEach { (key, label) ->
-                                    FilterChip(
-                                        selected = reviewSubject == key,
-                                        onClick = { reviewSubject = key },
-                                        label = { Text(label, style = MaterialTheme.typography.labelSmall) }
-                                    )
-                                }
-                                availableSubjects.forEach { subjectName ->
-                                    FilterChip(
-                                        selected = reviewSubject == subjectName,
-                                        onClick = { reviewSubject = subjectName },
-                                        label = { Text(subjectName, style = MaterialTheme.typography.labelSmall) }
-                                    )
-                                }
-                            }
-
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                FilterChip(
-                                    selected = reviewResult == "All",
-                                    onClick = { reviewResult = "All" },
-                                    label = { Text("Lahat (${history.size})", style = MaterialTheme.typography.labelSmall) }
-                                )
-                                FilterChip(
-                                    selected = reviewResult == "Correct",
-                                    onClick = { reviewResult = "Correct" },
-                                    label = { Text("✓ Correct (${history.count { it.correct }})", style = MaterialTheme.typography.labelSmall) }
-                                )
-                                FilterChip(
-                                    selected = reviewResult == "Wrong",
-                                    onClick = { reviewResult = "Wrong" },
-                                    label = { Text("✕ Wrong (${history.count { !it.correct }})", style = MaterialTheme.typography.labelSmall) }
-                                )
-                            }
-
-                            val filteredHistory = history.filter { item ->
-                                (reviewSubject == "All" || item.question.subject == reviewSubject) &&
-                                    (reviewResult == "All" ||
-                                        (reviewResult == "Correct" && item.correct) ||
-                                        (reviewResult == "Wrong" && !item.correct))
-                            }
-
-                            if (filteredHistory.isEmpty()) {
-                                Text("Walang sagot sa filter na ito.", color = muted, style = MaterialTheme.typography.bodySmall)
-                            } else {
-                                filteredHistory.forEach { item ->
-                                    Card(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        colors = CardDefaults.cardColors(containerColor = colors.surface)
-                                    ) {
-                                        Column(
-                                            Modifier.padding(10.dp),
-                                            verticalArrangement = Arrangement.spacedBy(4.dp)
-                                        ) {
-                                            Text(
-                                                "${item.question.subject} • Level ${item.level} • ${if (item.correct) "✓ Correct" else "✕ Wrong"}",
-                                                color = if (item.correct) Color(0xFF2E7D32) else Color(0xFFC62828),
-                                                fontWeight = FontWeight.Bold,
-                                                style = MaterialTheme.typography.labelMedium
-                                            )
-                                            Text(item.question.text, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyMedium)
-                                            Text(
-                                                "Sagot mo: ${item.question.choices.getOrElse(item.selected) { "—" }}",
-                                                style = MaterialTheme.typography.bodySmall
-                                            )
-                                            Text(
-                                                "Tamang sagot: ${item.question.choices.getOrElse(item.question.answer) { "—" }}",
-                                                style = MaterialTheme.typography.bodySmall
-                                            )
-                                            Text(item.question.explanation, color = muted, style = MaterialTheme.typography.bodySmall)
-                                        }
-                                    }
-                                }
-                            }
+                            Text("💔 Game Over", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, color = Color(0xFFF43F5E))
+                            Text("Score: $quizScore • Correct: $quizCorrect/${questions.size}", color = muted)
+                            Button(onClick = { retryCurrentQuiz() }, modifier = Modifier.fillMaxWidth()) { Text("Try Again") }
+                            OutlinedButton(onClick = { screen = Screen.HOME.name }, modifier = Modifier.fillMaxWidth()) { Text("Back to Home") }
                         }
                     }
 
-                    Screen.SHOP -> {
-                        ShopPage(
-                            coins = coins,
-                            fiftyFifty = fiftyFiftyItems,
-                            extraTime = extraTimeItems,
-                            skip = skipItems,
-                            onBuy5050 = { buyItem("5050") },
-                            onBuyTime = { buyItem("time") },
-                            onBuySkip = { buyItem("skip") }
-                        )
+                    Screen.LEVEL_UP -> {
+                        Column(
+                            Modifier.fillMaxWidth().padding(24.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(16.dp)
+                        ) {
+                            Text("🎉 Level Up!", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, color = Color(0xFF34D399))
+                            Text("You reached Level $level in $selectedSubject!", color = muted)
+                            Button(onClick = { screen = Screen.HOME.name }, modifier = Modifier.fillMaxWidth()) { Text("Continue") }
+                        }
                     }
 
-                    Screen.SETTINGS -> { screen = Screen.PROFILE.name }
+                    Screen.LEVEL_COMPLETE -> {
+                        Column(
+                            Modifier.fillMaxWidth().padding(24.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(16.dp)
+                        ) {
+                            Text("🏆 Max Level Reached!", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, color = Color(0xFFFDE68A))
+                            Text("You completed Level 100!", color = muted)
+                            Button(onClick = { screen = Screen.HOME.name }, modifier = Modifier.fillMaxWidth()) { Text("Back to Home") }
+                        }
+                    }
+
+                    else -> {
+                        Text("Page under construction.", color = muted)
+                    }
                 }
-
-                Spacer(Modifier.height(12.dp))
             }
         }
     }
 
+    StudyMateModals(
+        showCoinBurst = showCoinBurst,
+        showQuickQuizModal = showQuickQuizModal,
+        showCoinShopModal = showCoinShopModal,
+        showSubjectDialog = showSubjectDialog,
+        coins = coins,
+        quickQuestion = quickQuestion,
+        quickAnswered = quickAnswered,
+        quickSelected = quickSelected,
+        fiftyFiftyItems = fiftyFiftyItems,
+        extraTimeItems = extraTimeItems,
+        skipItems = skipItems,
+        subjectInput = subjectInput,
+        onQuickDismiss = { showQuickQuizModal = false },
+        onQuickAnswer = { answerQuickQuiz(it) },
+        onStartFullQuiz = { showQuickQuizModal = false; startQuiz("Mixed") },
+        onShopDismiss = { showCoinShopModal = false },
+        onBuy5050 = { buyItem("5050") },
+        onBuyTime = { buyItem("time") },
+        onBuySkip = { buyItem("skip") },
+        onSubjectDismiss = { showSubjectDialog = false },
+        onSubjectInputChange = { subjectInput = it },
+        onAddSubject = { name ->
+            val trimmed = name.trim()
+            if (trimmed.isNotEmpty() && trimmed !in customSubjects) {
+                customSubjects.add(trimmed)
+                prefs.edit().putString("customSubjects", encodeStrings(customSubjects)).apply()
+            }
+            subjectInput = ""
+            showSubjectDialog = false
+        }
+    )
+}
+
+@Composable
+private fun StudyMateModals(
+    showCoinBurst: Boolean,
+    showQuickQuizModal: Boolean,
+    showCoinShopModal: Boolean,
+    showSubjectDialog: Boolean,
+    coins: Int,
+    quickQuestion: Question?,
+    quickAnswered: Boolean,
+    quickSelected: Int,
+    fiftyFiftyItems: Int,
+    extraTimeItems: Int,
+    skipItems: Int,
+    subjectInput: String,
+    onQuickDismiss: () -> Unit,
+    onQuickAnswer: (Int) -> Unit,
+    onStartFullQuiz: () -> Unit,
+    onShopDismiss: () -> Unit,
+    onBuy5050: () -> Unit,
+    onBuyTime: () -> Unit,
+    onBuySkip: () -> Unit,
+    onSubjectDismiss: () -> Unit,
+    onSubjectInputChange: (String) -> Unit,
+    onAddSubject: (String) -> Unit
+) {
     if (showCoinBurst) {
         Box(
             modifier = Modifier.fillMaxSize(),
@@ -1276,15 +771,19 @@ private fun StudyMateApp() {
                 color = Color(0xFF064E3B).copy(alpha = 0.94f),
                 border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF34D399).copy(alpha = 0.65f))
             ) {
-                Text("✨ +25 COINS 🪙", modifier = Modifier.padding(horizontal = 18.dp, vertical = 10.dp), color = Color(0xFFA7F3D0), fontWeight = FontWeight.ExtraBold)
+                Text(
+                    "✨ +25 COINS 🪙",
+                    modifier = Modifier.padding(horizontal = 18.dp, vertical = 10.dp),
+                    color = Color(0xFFA7F3D0),
+                    fontWeight = FontWeight.ExtraBold
+                )
             }
         }
     }
 
     if (showQuickQuizModal) {
-        val q = quickQuestion
         AlertDialog(
-            onDismissRequest = { showQuickQuizModal = false },
+            onDismissRequest = onQuickDismiss,
             containerColor = Color(0xFF0F172A),
             titleContentColor = Color.White,
             textContentColor = muted,
@@ -1296,27 +795,35 @@ private fun StudyMateApp() {
                 }
             },
             text = {
-                if (q == null) {
+                val question = quickQuestion
+                if (question == null) {
                     Text("No unanswered Quick Quiz question is available right now.")
                 } else {
                     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Text(q.text, color = Color.White, fontWeight = FontWeight.Bold)
-                        Text("Type: ${q.type}", color = Color(0xFFC4B5FD), style = MaterialTheme.typography.bodySmall)
-                        q.choices.forEachIndexed { index, choice ->
-                            val selectedColor = if (quickAnswered && index == q.answer) Color(0xFF10B981) else if (quickAnswered && index == quickSelected) Color(0xFFF43F5E) else Color(0xFF1E293B)
+                        Text(question.text, color = Color.White, fontWeight = FontWeight.Bold)
+                        Text("Type: ${question.type}", color = Color(0xFFC4B5FD), style = MaterialTheme.typography.bodySmall)
+                        question.choices.forEachIndexed { index, choice ->
+                            val selectedColor = when {
+                                quickAnswered && index == question.answer -> Color(0xFF10B981)
+                                quickAnswered && index == quickSelected -> Color(0xFFF43F5E)
+                                else -> Color(0xFF1E293B)
+                            }
                             Surface(
-                                modifier = Modifier.fillMaxWidth().clickable(enabled = !quickAnswered) { answerQuickQuiz(index) },
+                                modifier = Modifier.fillMaxWidth().clickable(enabled = !quickAnswered) { onQuickAnswer(index) },
                                 shape = MaterialTheme.shapes.medium,
-                                color = selectedColor.copy(alpha = if (quickAnswered && (index == q.answer || index == quickSelected)) 0.28f else 0.75f),
-                                border = androidx.compose.foundation.BorderStroke(1.dp, if (index == q.answer && quickAnswered) Color(0xFF10B981) else Color.White.copy(alpha = 0.10f))
+                                color = selectedColor.copy(alpha = if (quickAnswered && (index == question.answer || index == quickSelected)) 0.28f else 0.75f),
+                                border = androidx.compose.foundation.BorderStroke(
+                                    1.dp,
+                                    if (index == question.answer && quickAnswered) Color(0xFF10B981) else Color.White.copy(alpha = 0.10f)
+                                )
                             ) {
                                 Text(choice, Modifier.padding(12.dp), color = Color.White, fontWeight = FontWeight.SemiBold)
                             }
                         }
                         if (quickAnswered) {
                             Text(
-                                if (quickSelected == q.answer) "Correct! +20 coins 🪙" else "Incorrect. ${q.explanation}",
-                                color = if (quickSelected == q.answer) Color(0xFF6EE7B7) else Color(0xFFFDA4AF),
+                                if (quickSelected == question.answer) "Correct! +20 coins 🪙" else "Incorrect. ${question.explanation}",
+                                color = if (quickSelected == question.answer) Color(0xFF6EE7B7) else Color(0xFFFDA4AF),
                                 fontWeight = FontWeight.Bold
                             )
                         }
@@ -1324,21 +831,19 @@ private fun StudyMateApp() {
                 }
             },
             confirmButton = {
-                if (q != null && quickAnswered) {
-                    TextButton(onClick = { showQuickQuizModal = false; startQuiz("Mixed") }) { Text("Start Full Quiz") }
-                } else {
-                    TextButton(onClick = { showQuickQuizModal = false; startQuiz("Mixed") }) { Text("Full Quiz") }
+                TextButton(onClick = onStartFullQuiz) {
+                    Text(if (quickQuestion != null && quickAnswered) "Start Full Quiz" else "Full Quiz")
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showQuickQuizModal = false }) { Text("Close") }
+                TextButton(onClick = onQuickDismiss) { Text("Close") }
             }
         )
     }
 
     if (showCoinShopModal) {
         AlertDialog(
-            onDismissRequest = { showCoinShopModal = false },
+            onDismissRequest = onShopDismiss,
             containerColor = Color(0xFF0F172A),
             titleContentColor = Color.White,
             textContentColor = muted,
@@ -1352,55 +857,38 @@ private fun StudyMateApp() {
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Text("Spend coins for extra power-ups. Every new quiz still gives one FREE use of each.", color = muted)
-                    ShopModalItem("50:50", "Remove two wrong choices", 50, fiftyFiftyItems, coins >= 50) { buyItem("5050") }
-                    ShopModalItem("+15 sec", "Add 15 seconds", 30, extraTimeItems, coins >= 30) { buyItem("time") }
-                    ShopModalItem("Skip", "Skip without losing a life", 40, skipItems, coins >= 40) { buyItem("skip") }
+                    ShopModalItem("50:50", "Remove two wrong choices", 50, fiftyFiftyItems, coins >= 50, onBuy5050)
+                    ShopModalItem("+15 sec", "Add 15 seconds", 30, extraTimeItems, coins >= 30, onBuyTime)
+                    ShopModalItem("Skip", "Skip without losing a life", 40, skipItems, coins >= 40, onBuySkip)
                 }
             },
             confirmButton = {
-                TextButton(onClick = { showCoinShopModal = false }) { Text("Done") }
+                TextButton(onClick = onShopDismiss) { Text("Done") }
             }
         )
     }
 
     if (showSubjectDialog) {
         AlertDialog(
-            onDismissRequest = { showSubjectDialog = false },
+            onDismissRequest = onSubjectDismiss,
             title = { Text("Add a subject") },
             text = {
                 OutlinedTextField(
                     value = subjectInput,
-                    onValueChange = { subjectInput = it },
+                    onValueChange = onSubjectInputChange,
                     label = { Text("Subject name") },
                     singleLine = true
                 )
             },
             confirmButton = {
-                TextButton(
-                    onClick = {
-                        val name = subjectInput.trim()
-                        if (name.isNotEmpty() && name !in customSubjects) {
-                            customSubjects.add(name)
-                            prefs.edit()
-                                .putString("customSubjects", encodeStrings(customSubjects))
-                                .apply()
-                        }
-                        subjectInput = ""
-                        showSubjectDialog = false
-                    }
-                ) {
-                    Text("Add")
-                }
+                TextButton(onClick = { onAddSubject(subjectInput) }) { Text("Add") }
             },
             dismissButton = {
-                TextButton(onClick = { showSubjectDialog = false }) {
-                    Text("Cancel")
-                }
+                TextButton(onClick = onSubjectDismiss) { Text("Cancel") }
             }
         )
     }
 }
-
 
 @Composable
 private fun LoginPage(
@@ -2246,8 +1734,6 @@ private fun emoji(subject: String): String = when (subject) {
 }
 
 private fun makeQuestions(subject: String, level: Int): List<Question> {
-    // Keep all previous quiz features, but make the new levels progressively harder.
-    // Mixed now covers every subject while retaining the same saved-progress system.
     val subjects = if (subject == "Mixed") {
         listOf("Math", "Science", "English", "Filipino", "Araling Panlipunan", "ICT", "PE & Health")
     } else {
@@ -2406,7 +1892,6 @@ private fun makeQuestions(subject: String, level: Int): List<Question> {
                     }
                 }
 
-                // Plausible, close distractors. Their positions are randomized.
                 val distractors = linkedSetOf(
                     answer + 1,
                     answer - 1,
@@ -2433,9 +1918,6 @@ private fun makeQuestions(subject: String, level: Int): List<Question> {
             }
         } else {
             questionBank(name).forEachIndexed { i, item ->
-                // The same saved answeredIds mechanism remains in place.
-                // Level-specific wording creates a fresh question instance while
-                // gradually moving from recall to application/challenge.
                 val variant = ((level - 1) % 5)
                 val challengeText = when (tier) {
                     1 -> item.text
@@ -2743,9 +2225,9 @@ private fun decodeHistory(raw: String): List<ReviewItem> = runCatching {
     (0 until array.length()).map {
         val obj = array.getJSONObject(it)
         val question = decodeQuestion(obj.getJSONObject("question"))
-        val levelFromQuestion = Regex("(?:-L|Level\\s+)(\\d+)", RegexOption.IGNORE_CASE)
+        val levelFromQuestion = Regex("(?:-L|Level\s+)(\d+)", RegexOption.IGNORE_CASE)
             .find(question.id)?.groupValues?.getOrNull(1)?.toIntOrNull()
-            ?: Regex("Level\\s+(\\d+)", RegexOption.IGNORE_CASE)
+            ?: Regex("Level\s+(\d+)", RegexOption.IGNORE_CASE)
                 .find(question.text)?.groupValues?.getOrNull(1)?.toIntOrNull()
             ?: 1
         ReviewItem(
