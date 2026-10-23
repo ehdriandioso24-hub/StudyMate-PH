@@ -247,11 +247,16 @@ private fun StudyMateApp() {
                     )
                     val subjects = (listOf("Math", "Science", "English", "Filipino") + customSubjects)
                         .filter { it.contains(search, true) }
-                    subjects.forEach { subject ->
-                        CardBox("${emoji(subject)} $subject", "Level $level • Lessons • Quiz") {
-                            selectedSubject = subject
-                            screen = Screen.LESSONS.name
-                        }
+                    for (subject in subjects) {
+                        CardBox(
+                            title = "${emoji(subject)} $subject",
+                            subtitle = "Level $level • Lessons • Quiz",
+                            onClick = {
+                                selectedSubject = subject
+                                search = ""
+                                screen = Screen.LESSONS.name
+                            }
+                        )
                     }
                     OutlinedButton(onClick = { showSubjectDialog = true }, Modifier.fillMaxWidth()) {
                         Text("＋ Add Custom Subject")
@@ -277,8 +282,12 @@ private fun StudyMateApp() {
                         value = search, onValueChange = { search = it },
                         label = { Text("Search lessons") }, modifier = Modifier.fillMaxWidth(), singleLine = true
                     )
-                    lessons.forEach { lesson ->
-                        CardBox(lesson.title, lesson.body) {}
+                    for (lesson in lessons) {
+                        CardBox(
+                            title = lesson.title,
+                            subtitle = lesson.body,
+                            onClick = {}
+                        )
                     }
                     Button(onClick = { startQuiz(selectedSubject) }, Modifier.fillMaxWidth()) {
                         Text("🧠 Start $selectedSubject Quiz")
@@ -398,8 +407,5 @@ private fun StudyMateApp() {
                 }
 
                 Screen.ACHIEVEMENTS -> {
-                    val achievements = listOf(
-                        Achievement("First Step", "Answer your first quiz question.", answered >= 1),
-                        Achievement("Getting Started", "Answer 10 questions.", answered >= 10),
-                        Achievement("Accuracy Star", "Reach 80% accuracy with at least 5 answers.", answered >= 5 && correct * 100 / answered >= 80),
-                  
+                    val accuracy = if (answered > 0) {
+                        (c
