@@ -21,6 +21,7 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -225,8 +226,47 @@ private fun StudyMateApp() {
     }
     var showSubjectDialog by remember { mutableStateOf(false) }
     var subjectInput by rememberSaveable { mutableStateOf("") }
+    var showQuickQuizModal by remember { mutableStateOf(false) }
+    var showCoinShopModal by remember { mutableStateOf(false) }
+    var showCoinBurst by remember { mutableStateOf(false) }
+    var quickQuestion by remember { mutableStateOf<Question?>(null) }
+    var quickAnswered by remember { mutableStateOf(false) }
+    var quickSelected by rememberSaveable { mutableIntStateOf(-1) }
 
-    fun saveProgress() {
+    val levelXp = (correct * 100 + quizScore).coerceAtLeast(0) % 1000
+    val levelXpProgress = levelXp / 1000f
+
+
+    fun openQuickQuiz() {
+        val pool = makeQuestions("Mixed", level)
+            .filter { it.id !in answeredIds }
+            .shuffled()
+        quickQuestion = pool.firstOrNull()
+        quickSelected = -1
+        quickAnswered = false
+        showQuickQuizModal = true
+    }
+
+    fun answerQuickQuiz(index: Int) {
+        val q = quickQuestion ?: return
+        if (quickAnswered) return
+        quickSelected = index
+        quickAnswered = true
+        val isCorrect = index == q.answer
+        if (isCorrect) {
+            correct++
+            answered++
+            coins += 20
+            answeredIds.add(q.id)
+            history.add(0, ReviewItem(q, index, true, level))
+            while (history.size > 500) history.removeAt(history.lastIndex)
+            saveProgress()
+            android.widget.Toast.makeText(context, "Correct! +20 coins 🪙", android.widget.Toast.LENGTH_SHORT).show()
+        } else {
+            android.widget.Toast.makeText(context, "Not quite. Try the full quiz for more practice.", android.widget.Toast.LENGTH_SHORT).show()
+        }
+    }
+
         subjectLevels[selectedSubject] = level
         prefs.edit()
             .putInt("level", level)
@@ -257,6 +297,7 @@ private fun StudyMateApp() {
         if (dailyLoginClaimDate == today) return
         coins += 25
         dailyLoginClaimDate = today
+        showCoinBurst = true
         saveProgress()
     }
 
@@ -420,6 +461,13 @@ private fun StudyMateApp() {
         Screen.valueOf(screen)
     }.getOrDefault(Screen.HOME)
 
+    LaunchedEffect(showCoinBurst) {
+        if (showCoinBurst) {
+            delay(900)
+            showCoinBurst = false
+        }
+    }
+
     LaunchedEffect(currentScreen, questionIndex, revealed, secondsLeft) {
         if (currentScreen == Screen.QUIZ && questions.getOrNull(questionIndex) != null && !revealed) {
             if (secondsLeft > 0) {
@@ -538,72 +586,21 @@ private fun StudyMateApp() {
         Scaffold(
             containerColor = colors.background,
             topBar = {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(12.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    if (currentScreen != Screen.HOME) {
-                        OutlinedButton(onClick = {
-                            screen = if (currentScreen == Screen.QUIZ) {
-                                Screen.SUBJECTS.name
-                            } else {
-                                Screen.HOME.name
-                            }
-                        }) {
-                            Text("← Back")
-                        }
-                        Spacer(Modifier.width(8.dp))
-                    }
-
-                    Column {
-                        Text(
-                            "StudyMate PH",
-                            style = MaterialTheme.typography.headlineSmall,
-                            color = colors.primary,
-                            fontWeight = FontWeight.ExtraBold
-                        )
-                        Text(
-                            "Learn smarter, one day at a time.",
-                            color = muted
-                        )
-                    }
-                }
+                GlassTopBar(
+                    screen = currentScreen,
+                    coins = coins,
+                    level = level,
+                    onBack = {
+                        screen = if (currentScreen == Screen.QUIZ) Screen.SUBJECTS.name else Screen.HOME.name
+                    },
+                    onProfile = { screen = Screen.PROFILE.name }
+                )
             },
             bottomBar = {
-                NavigationBar(containerColor = panel) {
-                    NavigationBarItem(
-                        selected = currentScreen == Screen.HOME,
-                        onClick = { screen = Screen.HOME.name },
-                        icon = { Text("🏠") },
-                        label = { Text("Home") }
-                    )
-                    NavigationBarItem(
-                        selected = currentScreen == Screen.SUBJECTS,
-                        onClick = { screen = Screen.SUBJECTS.name },
-                        icon = { Text("📚") },
-                        label = { Text("Subjects") }
-                    )
-                    NavigationBarItem(
-                        selected = currentScreen == Screen.SEARCH,
-                        onClick = { screen = Screen.SEARCH.name },
-                        icon = { Text("🔍") },
-                        label = { Text("Search") }
-                    )
-                    NavigationBarItem(
-                        selected = currentScreen == Screen.PROGRESS,
-                        onClick = { screen = Screen.PROGRESS.name },
-                        icon = { Text("📊") },
-                        label = { Text("Progress") }
-                    )
-                    NavigationBarItem(
-                        selected = currentScreen == Screen.PROFILE,
-                        onClick = { screen = Screen.PROFILE.name },
-                        icon = { Text("👤") },
-                        label = { Text("Profile") }
-                    )
-                }
+                GlassBottomNav(
+                    currentScreen = currentScreen,
+                    onNavigate = { screen = it.name }
+                )
             }
         ) { padding ->
             Column(
@@ -616,40 +613,50 @@ private fun StudyMateApp() {
             ) {
                 when (currentScreen) {
                     Screen.HOME -> {
-                        CardBox(
-                            "Welcome, ${studentName.ifBlank { "Learner" }}! ✨",
-                            "Level $level • ${achievementsFor(answered, correct).size} achievements unlocked"
-                        ) { screen = Screen.PROFILE.name }
+                        NeonHeroCard(
+                            name = studentName.ifBlank { "Learner" },
+                            level = level,
+                            coins = coins,
+                            xp = levelXp,
+                            xpProgress = levelXpProgress,
+                            achievements = achievementsFor(answered, correct).size,
+                            onProfile = { screen = Screen.PROFILE.name }
+                        )
 
-                        CardBox(
-                            "🧠 Quick Quiz",
-                            "Mixed questions from all 7 subjects"
-                        ) { startQuiz("Mixed") }
+                        NeonActionCard(
+                            title = "🧠 Quick Quiz",
+                            subtitle = "Mixed questions from all 7 subjects • playable preview",
+                            badge = "POPULAR",
+                            accent = purple,
+                            onClick = { openQuickQuiz() }
+                        )
 
                         val today = LocalDate.now().toString()
                         val dailyDone = dailyCompletedDate == today
-                        CardBox(
-                            if (dailyDone) "✅ Daily Challenge Complete" else "🔥 Daily Challenge",
-                            if (dailyDone) "Come back tomorrow • ${dailyStreak}-day streak" else "10 mixed questions • +100 coins bonus • Current streak: $dailyStreak"
-                        ) { if (!dailyDone) startQuiz("Mixed", daily = true) }
+                        NeonActionCard(
+                            title = if (dailyDone) "✅ Daily Challenge Complete" else "🔥 Daily Challenge",
+                            subtitle = if (dailyDone) "Come back tomorrow • ${dailyStreak}-day streak" else "10 mixed questions • +100 coins bonus • Current streak: $dailyStreak",
+                            badge = if (dailyDone) "DONE" else "+100 COINS",
+                            accent = Color(0xFFF59E0B),
+                            onClick = { if (!dailyDone) startQuiz("Mixed", daily = true) }
+                        )
 
                         val loginClaimed = dailyLoginClaimDate == LocalDate.now().toString()
-                        CardBox(
-                            if (loginClaimed) "✅ Daily Login Coins Collected" else "🎁 Daily Login Reward",
-                            if (loginClaimed) "Come back tomorrow for another +25 coins" else "Collect +25 coins today • $coins coins available"
-                        ) { if (!loginClaimed) claimDailyLoginCoins() }
+                        NeonActionCard(
+                            title = if (loginClaimed) "✅ Daily Login Collected" else "🎁 Daily Reward",
+                            subtitle = if (loginClaimed) "Come back tomorrow for another +25 coins" else "Collect +25 coins today • $coins coins available",
+                            badge = if (loginClaimed) "CLAIMED" else "+25 COINS",
+                            accent = Color(0xFF10B981),
+                            onClick = { if (!loginClaimed) claimDailyLoginCoins() }
+                        )
 
-                        CardBox(
-                            "🛒 Coin Shop",
-                            "Spend coins on 50:50, +15 sec, and Skip • $coins coins available"
-                        ) { screen = Screen.SHOP.name }
-
-                        Button(
-                            onClick = { screen = Screen.SHOP.name },
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text("Open Coin Shop • 🪙 $coins")
-                        }
+                        NeonActionCard(
+                            title = "🛒 Coin Shop",
+                            subtitle = "50:50 • +15 sec • Skip • $coins coins available",
+                            badge = "SHOP",
+                            accent = Color(0xFF06B6D4),
+                            onClick = { showCoinShopModal = true }
+                        )
 
                         CardBox(
                             "📚 My Subjects",
@@ -685,11 +692,6 @@ private fun StudyMateApp() {
                             "👤 Student Profile",
                             "Manage your local StudyMate account"
                         ) { screen = Screen.PROFILE.name }
-
-                        CardBox(
-                            "⚙️ Settings",
-                            "Customize app appearance"
-                        ) { screen = Screen.SETTINGS.name }
 
                         Text(
                             "Small progress is still progress. Keep going! 🌟",
@@ -805,6 +807,18 @@ private fun StudyMateApp() {
                             fiftyFifty = fiftyFiftyItems,
                             extraTime = extraTimeItems,
                             skip = skipItems,
+                            lightTheme = lightTheme,
+                            tickingSound = tickingSound,
+                            importMessage = importMessage,
+                            onToggleLightTheme = {
+                                lightTheme = !lightTheme
+                                prefs.edit().putBoolean("lightTheme", lightTheme).apply()
+                            },
+                            onToggleTicking = {
+                                tickingSound = !tickingSound
+                                prefs.edit().putBoolean("tickingSound", tickingSound).apply()
+                            },
+                            onImport = { launcher.launch(arrayOf("application/json", "text/plain")) },
                             onSave = { name, email ->
                                 studentName = name
                                 studentEmail = email
@@ -1242,84 +1256,110 @@ private fun StudyMateApp() {
                         )
                     }
 
-                    Screen.SETTINGS -> {
-                        Heading(
-                            "⚙️ Settings",
-                            "Customize your app."
-                        )
-
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { lightTheme = !lightTheme }
-                                .padding(vertical = 12.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text("Light Theme", modifier = Modifier.weight(1f))
-                            Switch(
-                                checked = lightTheme,
-                                onCheckedChange = { lightTheme = it }
-                            )
-                        }
-
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 12.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text("Red Zone ticking sound")
-                                Text("Beeps during the final 10 seconds of a question.", color = muted, style = MaterialTheme.typography.bodySmall)
-                            }
-                            Switch(
-                                checked = tickingSound,
-                                onCheckedChange = {
-                                    tickingSound = it
-                                    prefs.edit().putBoolean("tickingSound", it).apply()
-                                }
-                            )
-                        }
-
-                        Button(
-                            onClick = {
-                                prefs.edit()
-                                    .putBoolean("lightTheme", lightTheme)
-                                    .apply()
-                            },
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text("Save Settings")
-                        }
-
-                        Button(
-                            onClick = {
-                                launcher.launch(arrayOf("application/json", "text/plain"))
-                            },
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text("🗂️ Import Lessons / Questions")
-                        }
-
-                        if (importMessage.isNotBlank()) {
-                            Text(importMessage, color = colors.secondary)
-                        }
-
-                        CardBox(
-                            "☁️ Online Database / Sync",
-                            "Firebase connection is not configured yet. This version keeps data locally and is ready for Firebase integration."
-                        ) {}
-
-                        Text(
-                            "Notes, quiz scores, profile, imported content, and review history are saved on this device.",
-                            color = muted
-                        )
-                    }
+                    Screen.SETTINGS -> { screen = Screen.PROFILE.name }
                 }
 
                 Spacer(Modifier.height(12.dp))
             }
         }
+    }
+
+    if (showCoinBurst) {
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.TopCenter
+        ) {
+            Surface(
+                modifier = Modifier.padding(top = 82.dp),
+                shape = MaterialTheme.shapes.extraLarge,
+                color = Color(0xFF064E3B).copy(alpha = 0.94f),
+                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF34D399).copy(alpha = 0.65f))
+            ) {
+                Text("✨ +25 COINS 🪙", modifier = Modifier.padding(horizontal = 18.dp, vertical = 10.dp), color = Color(0xFFA7F3D0), fontWeight = FontWeight.ExtraBold)
+            }
+        }
+    }
+
+    if (showQuickQuizModal) {
+        val q = quickQuestion
+        AlertDialog(
+            onDismissRequest = { showQuickQuizModal = false },
+            containerColor = Color(0xFF0F172A),
+            titleContentColor = Color.White,
+            textContentColor = muted,
+            title = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("🧠 Quick Quiz", fontWeight = FontWeight.ExtraBold)
+                    Spacer(Modifier.weight(1f))
+                    Text("🪙 $coins", color = Color(0xFFFDE68A), fontWeight = FontWeight.Bold)
+                }
+            },
+            text = {
+                if (q == null) {
+                    Text("No unanswered Quick Quiz question is available right now.")
+                } else {
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Text(q.text, color = Color.White, fontWeight = FontWeight.Bold)
+                        Text("Type: ${q.type}", color = Color(0xFFC4B5FD), style = MaterialTheme.typography.bodySmall)
+                        q.choices.forEachIndexed { index, choice ->
+                            val selectedColor = if (quickAnswered && index == q.answer) Color(0xFF10B981) else if (quickAnswered && index == quickSelected) Color(0xFFF43F5E) else Color(0xFF1E293B)
+                            Surface(
+                                modifier = Modifier.fillMaxWidth().clickable(enabled = !quickAnswered) { answerQuickQuiz(index) },
+                                shape = MaterialTheme.shapes.medium,
+                                color = selectedColor.copy(alpha = if (quickAnswered && (index == q.answer || index == quickSelected)) 0.28f else 0.75f),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, if (index == q.answer && quickAnswered) Color(0xFF10B981) else Color.White.copy(alpha = 0.10f))
+                            ) {
+                                Text(choice, Modifier.padding(12.dp), color = Color.White, fontWeight = FontWeight.SemiBold)
+                            }
+                        }
+                        if (quickAnswered) {
+                            Text(
+                                if (quickSelected == q.answer) "Correct! +20 coins 🪙" else "Incorrect. ${q.explanation}",
+                                color = if (quickSelected == q.answer) Color(0xFF6EE7B7) else Color(0xFFFDA4AF),
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                if (q != null && quickAnswered) {
+                    TextButton(onClick = { showQuickQuizModal = false; startQuiz("Mixed") }) { Text("Start Full Quiz") }
+                } else {
+                    TextButton(onClick = { showQuickQuizModal = false; startQuiz("Mixed") }) { Text("Full Quiz") }
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showQuickQuizModal = false }) { Text("Close") }
+            }
+        )
+    }
+
+    if (showCoinShopModal) {
+        AlertDialog(
+            onDismissRequest = { showCoinShopModal = false },
+            containerColor = Color(0xFF0F172A),
+            titleContentColor = Color.White,
+            textContentColor = muted,
+            title = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("🛒 Coin Shop", fontWeight = FontWeight.ExtraBold)
+                    Spacer(Modifier.weight(1f))
+                    Text("🪙 $coins", color = Color(0xFFFDE68A), fontWeight = FontWeight.ExtraBold)
+                }
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text("Spend coins for extra power-ups. Every new quiz still gives one FREE use of each.", color = muted)
+                    ShopModalItem("50:50", "Remove two wrong choices", 50, fiftyFiftyItems, coins >= 50) { buyItem("5050") }
+                    ShopModalItem("+15 sec", "Add 15 seconds", 30, extraTimeItems, coins >= 30) { buyItem("time") }
+                    ShopModalItem("Skip", "Skip without losing a life", 40, skipItems, coins >= 40) { buyItem("skip") }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showCoinShopModal = false }) { Text("Done") }
+            }
+        )
     }
 
     if (showSubjectDialog) {
@@ -1490,6 +1530,40 @@ private fun ShopItem(
 }
 
 @Composable
+private fun ShopModalItem(
+    title: String,
+    description: String,
+    cost: Int,
+    owned: Int,
+    canBuy: Boolean,
+    onBuy: () -> Unit
+) {
+    Surface(
+        shape = MaterialTheme.shapes.large,
+        color = Color(0xFF111827).copy(alpha = 0.9f),
+        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF8B5CF6).copy(alpha = 0.25f))
+    ) {
+        Row(
+            Modifier.fillMaxWidth().padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text(title, color = Color.White, fontWeight = FontWeight.ExtraBold)
+                Text(description, color = muted, style = MaterialTheme.typography.bodySmall)
+                Text("Owned: $owned • $cost coins", color = Color(0xFFC4B5FD), style = MaterialTheme.typography.labelSmall)
+            }
+            Button(
+                onClick = onBuy,
+                enabled = canBuy,
+                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
+            ) {
+                Text("Buy")
+            }
+        }
+    }
+}
+
+@Composable
 private fun ProfilePage(
     name: String,
     email: String,
@@ -1501,6 +1575,12 @@ private fun ProfilePage(
     fiftyFifty: Int,
     extraTime: Int,
     skip: Int,
+    lightTheme: Boolean,
+    tickingSound: Boolean,
+    importMessage: String,
+    onToggleLightTheme: () -> Unit,
+    onToggleTicking: () -> Unit,
+    onImport: () -> Unit,
     onSave: (String, String) -> Unit,
     onLogout: () -> Unit
 ) {
@@ -1540,6 +1620,42 @@ private fun ProfilePage(
     CardBox("🎯 Correct answers", "$correct") {}
     CardBox("🏆 Achievements", achievementsFor(answered, correct).joinToString(" • "))
 
+    Heading("⚙️ Settings", "App preferences are now inside your Profile.")
+
+    Row(
+        modifier = Modifier.fillMaxWidth().clickable { onToggleLightTheme() }.padding(vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text("Light Theme", fontWeight = FontWeight.SemiBold)
+            Text("Switch between light and neon dark appearance.", color = muted, style = MaterialTheme.typography.bodySmall)
+        }
+        Switch(checked = lightTheme, onCheckedChange = { onToggleLightTheme() })
+    }
+
+    Row(
+        modifier = Modifier.fillMaxWidth().clickable { onToggleTicking() }.padding(vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text("Red Zone ticking sound", fontWeight = FontWeight.SemiBold)
+            Text("Beeps during the final 10 seconds of a question.", color = muted, style = MaterialTheme.typography.bodySmall)
+        }
+        Switch(checked = tickingSound, onCheckedChange = { onToggleTicking() })
+    }
+
+    OutlinedButton(onClick = onImport, modifier = Modifier.fillMaxWidth()) {
+        Text("🗂️ Import Lessons / Questions")
+    }
+    if (importMessage.isNotBlank()) {
+        Text(importMessage, color = MaterialTheme.colorScheme.secondary, style = MaterialTheme.typography.bodySmall)
+    }
+
+    CardBox(
+        "☁️ Online Database / Sync",
+        "Firebase connection is not configured yet. Your data stays local and is ready for future sync."
+    ) {}
+
     OutlinedButton(
         onClick = onLogout,
         modifier = Modifier.fillMaxWidth()
@@ -1575,22 +1691,213 @@ private fun Heading(title: String, subtitle: String) {
 
 @Composable
 private fun CardBox(title: String, subtitle: String, onClick: () -> Unit = {}) {
+    val accent = if (title.contains("🔥") || title.contains("Daily")) Color(0xFFF59E0B)
+        else if (title.contains("🛒") || title.contains("Coins")) Color(0xFF06B6D4)
+        else Color(0xFF8B5CF6)
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick),
+        shape = MaterialTheme.shapes.large,
+        border = androidx.compose.foundation.BorderStroke(1.dp, accent.copy(alpha = 0.28f)),
+        colors = CardDefaults.cardColors(containerColor = Color.Transparent)
+    ) {
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .background(
+                    Brush.linearGradient(
+                        listOf(
+                            Color(0xFF111827).copy(alpha = 0.94f),
+                            Color(0xFF172554).copy(alpha = 0.78f),
+                            Color(0xFF0B1020).copy(alpha = 0.96f)
+                        )
+                    )
+                )
+        ) {
+            Column(
+                Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Text(subtitle, color = muted)
+            }
+        }
+    }
+}
+
+@Composable
+private fun NeonHeroCard(
+    name: String,
+    level: Int,
+    coins: Int,
+    xp: Int,
+    xpProgress: Float,
+    achievements: Int,
+    onProfile: () -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onProfile),
+        shape = MaterialTheme.shapes.extraLarge,
+        border = androidx.compose.foundation.BorderStroke(1.dp, purple.copy(alpha = 0.45f)),
+        colors = CardDefaults.cardColors(containerColor = Color.Transparent)
+    ) {
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .background(
+                    Brush.linearGradient(
+                        listOf(Color(0xFF312E81), Color(0xFF111827), Color(0xFF0F172A))
+                    )
+                )
+                .padding(18.dp)
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("StudyMate PH", color = Color(0xFFA78BFA), fontWeight = FontWeight.ExtraBold)
+                        Text("Welcome, $name! ✨", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.ExtraBold)
+                        Text("Level $level • $achievements achievements unlocked", color = muted, style = MaterialTheme.typography.bodySmall)
+                    }
+                    Surface(
+                        shape = MaterialTheme.shapes.large,
+                        color = Color(0xFF0F172A).copy(alpha = 0.82f),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFF59E0B).copy(alpha = 0.45f))
+                    ) {
+                        Text("🪙 $coins", modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp), color = Color(0xFFFDE68A), fontWeight = FontWeight.ExtraBold)
+                    }
+                }
+                Text("XP Progress  •  $xp / 1000 XP", color = Color(0xFFC4B5FD), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodySmall)
+                LinearProgressIndicator(
+                    progress = { xpProgress },
+                    modifier = Modifier.fillMaxWidth().height(9.dp),
+                    color = Color(0xFF22D3EE),
+                    trackColor = Color(0xFF1E293B),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun NeonActionCard(
+    title: String,
+    subtitle: String,
+    badge: String,
+    accent: Color,
+    onClick: () -> Unit
+) {
     Card(
         modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
-        )
+        shape = MaterialTheme.shapes.extraLarge,
+        border = androidx.compose.foundation.BorderStroke(1.dp, accent.copy(alpha = 0.42f)),
+        colors = CardDefaults.cardColors(containerColor = Color.Transparent)
     ) {
-        Column(
-            Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp)
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .background(
+                    Brush.horizontalGradient(
+                        listOf(accent.copy(alpha = 0.20f), Color(0xFF111827).copy(alpha = 0.88f), Color(0xFF0B1020).copy(alpha = 0.96f))
+                    )
+                )
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(
-                title,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold
-            )
-            Text(subtitle, color = muted)
+            Surface(
+                shape = MaterialTheme.shapes.large,
+                color = accent.copy(alpha = 0.14f),
+                border = androidx.compose.foundation.BorderStroke(1.dp, accent.copy(alpha = 0.45f))
+            ) {
+                Text(title.take(2), modifier = Modifier.padding(12.dp), fontWeight = FontWeight.ExtraBold)
+            }
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(title, fontWeight = FontWeight.ExtraBold)
+                    Spacer(Modifier.width(7.dp))
+                    Surface(color = accent.copy(alpha = 0.18f), shape = MaterialTheme.shapes.small) {
+                        Text(badge, modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp), color = accent, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.ExtraBold)
+                    }
+                }
+                Text(subtitle, color = muted, style = MaterialTheme.typography.bodySmall)
+            }
+            Text("›", color = accent, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.ExtraBold)
+        }
+    }
+}
+
+@Composable
+private fun GlassTopBar(
+    screen: Screen,
+    coins: Int,
+    level: Int,
+    onBack: () -> Unit,
+    onProfile: () -> Unit
+) {
+    Row(
+        Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        if (screen != Screen.HOME) {
+            OutlinedButton(onClick = onBack) { Text("←") }
+            Spacer(Modifier.width(8.dp))
+        }
+        Column(Modifier.weight(1f)) {
+            Text("StudyMate PH", color = Color(0xFFC084FC), fontWeight = FontWeight.ExtraBold)
+            Text("Level $level • Learn smarter, one day at a time", color = muted, style = MaterialTheme.typography.bodySmall)
+        }
+        Surface(
+            modifier = Modifier.clickable(onClick = onProfile),
+            shape = MaterialTheme.shapes.large,
+            color = Color(0xFF0F172A).copy(alpha = 0.82f),
+            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFF59E0B).copy(alpha = 0.38f))
+        ) {
+            Text("🪙 $coins  👤", modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp), color = Color(0xFFFDE68A), fontWeight = FontWeight.Bold)
+        }
+    }
+}
+
+@Composable
+private fun GlassBottomNav(
+    currentScreen: Screen,
+    onNavigate: (Screen) -> Unit
+) {
+    val items = listOf(
+        Triple(Screen.HOME, "🏠", "Home"),
+        Triple(Screen.SUBJECTS, "📚", "Subjects"),
+        Triple(Screen.SEARCH, "🔍", "Search"),
+        Triple(Screen.PROGRESS, "📊", "Progress"),
+        Triple(Screen.PROFILE, "👤", "Profile")
+    )
+    Surface(
+        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+        shape = MaterialTheme.shapes.extraLarge,
+        color = Color(0xFF0F172A).copy(alpha = 0.92f),
+        border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.10f)),
+        shadowElevation = 10.dp
+    ) {
+        Row(
+            Modifier.fillMaxWidth().padding(5.dp),
+            horizontalArrangement = Arrangement.SpaceEvenly
+        ) {
+            items.forEach { (item, icon, label) ->
+                val selected = currentScreen == item
+                Surface(
+                    modifier = Modifier.weight(1f).clickable { onNavigate(item) },
+                    shape = MaterialTheme.shapes.large,
+                    color = if (selected) Color(0xFF7C3AED).copy(alpha = 0.28f) else Color.Transparent,
+                    border = if (selected) androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFA78BFA).copy(alpha = 0.35f)) else null
+                ) {
+                    Column(
+                        Modifier.padding(vertical = 8.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(icon)
+                        Text(label, style = MaterialTheme.typography.labelSmall, color = if (selected) Color(0xFFE9D5FF) else muted)
+                    }
+                }
+            }
         }
     }
 }
