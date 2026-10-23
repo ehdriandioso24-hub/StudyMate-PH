@@ -41,7 +41,8 @@ private data class Question(
     val text: String,
     val choices: List<String>,
     val answer: Int,
-    val explanation: String
+    val explanation: String,
+    val type: String = "Multiple Choice"
 )
 
 private data class ReviewItem(
@@ -61,7 +62,8 @@ private data class BankItem(
     val text: String,
     val choices: List<String>,
     val answer: Int,
-    val explanation: String
+    val explanation: String,
+    val type: String = "Multiple Choice"
 )
 
 private val bg = Color(0xFF080D1D)
@@ -265,7 +267,14 @@ private fun StudyMateApp() {
             "skip" -> 40
             else -> 0
         }
-        if (cost == 0 || coins < cost) return
+        if (cost == 0) {
+            android.widget.Toast.makeText(context, "Unknown shop item", android.widget.Toast.LENGTH_SHORT).show()
+            return
+        }
+        if (coins < cost) {
+            android.widget.Toast.makeText(context, "Not enough coins. You have $coins, need $cost.", android.widget.Toast.LENGTH_SHORT).show()
+            return
+        }
         coins -= cost
         when (type) {
             "5050" -> fiftyFiftyItems++
@@ -273,6 +282,7 @@ private fun StudyMateApp() {
             "skip" -> skipItems++
         }
         saveProgress()
+        android.widget.Toast.makeText(context, "Purchased! Your coins and inventory were saved.", android.widget.Toast.LENGTH_SHORT).show()
     }
 
     fun startQuiz(subject: String, daily: Boolean = false) {
@@ -634,6 +644,13 @@ private fun StudyMateApp() {
                             "Spend coins on 50:50, +15 sec, and Skip • $coins coins available"
                         ) { screen = Screen.SHOP.name }
 
+                        Button(
+                            onClick = { screen = Screen.SHOP.name },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("Open Coin Shop • 🪙 $coins")
+                        }
+
                         CardBox(
                             "📚 My Subjects",
                             "7 subjects • Level 1–100"
@@ -815,8 +832,9 @@ private fun StudyMateApp() {
                         if (q != null) {
                             CardBox(
                                 "${if (secondsLeft <= 10) "🚨 RED ZONE" else "⏱️ Time left"} • ${secondsLeft}s",
-                                "❤️ Lives: ${"♥ ".repeat(lives).trim()}${if (lives == 0) "—" else ""}   🔥 Streak: $streak   ⭐ Score: $quizScore"
+                                "❤️ Lives: ${"♥ ".repeat(lives).trim()}${if (lives == 0) "—" else ""}   🔥 Streak: $streak   🪙 Coins: $coins   ⭐ Score: $quizScore"
                             ) {}
+                            Text("📝 Type: ${q.type}", color = colors.secondary, fontWeight = FontWeight.Bold)
                             if (secondsLeft <= 10) {
                                 Text("Hurry! Red Zone!", color = Color(0xFFFF5252), fontWeight = FontWeight.ExtraBold)
                             }
@@ -2100,7 +2118,8 @@ private fun makeQuestions(subject: String, level: Int): List<Question> {
                         "Level $level • ${difficultyName(level)}: $text",
                         options.map { it.toString() },
                         options.indexOf(answer),
-                        "Difficulty: ${difficultyName(level)}. Solve using the correct order of operations where needed. The correct answer is $answer."
+                        "Difficulty: ${difficultyName(level)}. Solve using the correct order of operations where needed. The correct answer is $answer.",
+                        "Calculation"
                     )
                 )
             }
@@ -2128,7 +2147,8 @@ private fun makeQuestions(subject: String, level: Int): List<Question> {
                         finalText,
                         shuffledChoices,
                         shuffledAnswer,
-                        "Difficulty: ${difficultyName(level)}. ${item.explanation}"
+                        "Difficulty: ${difficultyName(level)}. ${item.explanation}",
+                        item.type
                     )
                 )
             }
@@ -2146,7 +2166,7 @@ private fun difficultyName(level: Int): String = when {
     else -> "Expert"
 }
 
-private fun questionBank(subject: String): List<BankItem> = when (subject) {
+private fun questionBank(subject: String): List<BankItem> = (when (subject) {
     "Science" -> listOf(
         BankItem("Which planet is known as the Red Planet?", listOf("Venus", "Jupiter", "Mars", "Mercury"), 2, "Mars looks reddish because of iron-rich dust."),
         BankItem("Which organ pumps blood around the body?", listOf("Lungs", "Heart", "Brain", "Stomach"), 1, "The heart pumps blood."),
@@ -2204,6 +2224,61 @@ private fun questionBank(subject: String): List<BankItem> = when (subject) {
         BankItem("Ano ang dapat gawin kapag nakakaramdam ng matinding sakit habang nag-eehersisyo?", listOf("Huminto at magsabi sa trusted adult/coach", "Ipagpatuloy agad", "Dagdagan ang intensity", "Huwag pansinin"), 0, "Ang matinding sakit ay senyales para huminto at humingi ng angkop na tulong.")
     )
 
+    else -> emptyList()
+}) + extraQuestionBank(subject)
+
+private fun extraQuestionBank(subject: String): List<BankItem> = when (subject) {
+    "Science" -> listOf(
+        BankItem("True or False: The Earth revolves around the Sun.", listOf("True", "False"), 0, "Earth orbits the Sun.", "True / False"),
+        BankItem("Which state of matter has a fixed volume but no fixed shape?", listOf("Solid", "Liquid", "Gas", "Plasma"), 1, "A liquid keeps its volume but takes the shape of its container.", "Concept"),
+        BankItem("Which part of a cell contains genetic material?", listOf("Nucleus", "Cell wall", "Vacuole", "Cytoplasm"), 0, "In typical eukaryotic cells, DNA is mainly stored in the nucleus.", "Concept"),
+        BankItem("A shadow is formed when light is blocked by an object. True or False?", listOf("True", "False"), 0, "An opaque object can block light and form a shadow.", "True / False"),
+        BankItem("Which energy source is renewable?", listOf("Coal", "Solar", "Diesel", "Natural gas"), 1, "Solar energy is naturally replenished.", "Application"),
+        BankItem("Why does ice float on liquid water?", listOf("It is less dense", "It is hotter", "It is heavier", "It has no mass"), 0, "Solid water is less dense than liquid water.", "Reasoning"),
+        BankItem("Which organ is primarily responsible for gas exchange?", listOf("Lungs", "Kidneys", "Liver", "Skin"), 0, "The lungs exchange oxygen and carbon dioxide.", "Concept")
+    )
+    "English" -> listOf(
+        BankItem("True or False: 'Quickly' is usually an adverb.", listOf("True", "False"), 0, "Quickly commonly modifies a verb and is an adverb.", "True / False"),
+        BankItem("Choose the sentence with correct subject-verb agreement.", listOf("The students studies.", "The students study.", "The students studying.", "The students is study."), 1, "The plural subject 'students' takes 'study'.", "Grammar"),
+        BankItem("Which word is closest in meaning to 'accurate'?", listOf("Correct", "Noisy", "Ancient", "Careless"), 0, "Accurate means correct or exact.", "Vocabulary"),
+        BankItem("What is the main purpose of a conclusion in a paragraph?", listOf("Introduce a new topic", "Wrap up the main idea", "List random words", "Remove the title"), 1, "A conclusion closes the discussion and reinforces the main idea.", "Reading"),
+        BankItem("Which is a complete sentence?", listOf("Because it rained.", "Running in the park.", "The class started early.", "After lunch."), 2, "The sentence has a subject and a complete predicate.", "Grammar"),
+        BankItem("True or False: A synonym has a similar meaning to another word.", listOf("True", "False"), 0, "Synonyms are words with similar meanings.", "True / False"),
+        BankItem("In a story, what does 'setting' describe?", listOf("Where and when", "Only the villain", "The final answer", "The title font"), 0, "Setting is the time and place of a story.", "Reading")
+    )
+    "Filipino" -> listOf(
+        BankItem("Tama o Mali: Ang pangngalan ay ngalan ng tao, bagay, lugar, o ideya.", listOf("Tama", "Mali"), 0, "Ang pangngalan ay tumutukoy sa tao, bagay, lugar, hayop, o ideya.", "Tama / Mali"),
+        BankItem("Alin ang wastong gamit ng 'ng' sa pangungusap?", listOf("Kumain ng mangga si Ana.", "Kumain nang mangga si Ana.", "Kumain ng si Ana mangga.", "Ng kumain mangga Ana."), 0, "Ginagamit ang 'ng' bilang pananda sa layon sa pangungusap.", "Grammar"),
+        BankItem("Ano ang pangunahing layunin ng isang talata?", listOf("Maglahad ng malinaw na ideya", "Maglagay ng random na salita", "Tanggalin ang paksa", "Ulitin ang pamagat lamang"), 0, "Ang talata ay naglalahad at nag-uugnay ng mga ideya.", "Pag-unawa"),
+        BankItem("Alin ang kasingkahulugan ng 'mabilis'?", listOf("Matulin", "Mabagal", "Tahimik", "Mabigat"), 0, "Ang matulin ay kasingkahulugan ng mabilis.", "Talasalitaan"),
+        BankItem("Tama o Mali: Ang pandiwa ay nagsasaad ng kilos o gawain.", listOf("Tama", "Mali"), 0, "Ang pandiwa ay nagsasaad ng kilos o kalagayan.", "Tama / Mali"),
+        BankItem("Alin ang pang-uri sa 'Mabait na bata ang tumulong.'?", listOf("Bata", "Tumulong", "Mabait", "Ang"), 2, "Ang 'mabait' ay naglalarawan sa bata.", "Grammar"),
+        BankItem("Ano ang kasalungat ng 'malinis'?", listOf("Marumi", "Mabango", "Maayos", "Maliwanag"), 0, "Ang marumi ay kasalungat ng malinis.", "Talasalitaan")
+    )
+    "Araling Panlipunan" -> listOf(
+        BankItem("Tama o Mali: Ang Pilipinas ay isang kapuluan.", listOf("Tama", "Mali"), 0, "Ang Pilipinas ay binubuo ng maraming pulo.", "Tama / Mali"),
+        BankItem("Alin ang halimbawa ng yamang tubig?", listOf("Ilog", "Ginto", "Kagubatan", "Lupaing sakahan"), 0, "Ang ilog ay anyong tubig at likas na yaman.", "Concept"),
+        BankItem("Bakit mahalaga ang mga batas sa isang lipunan?", listOf("Upang magkaroon ng kaayusan", "Upang walang tuntunin", "Upang alisin ang pamahalaan", "Upang bawasan ang edukasyon"), 0, "Tumutulong ang batas sa pagpapanatili ng kaayusan at karapatan.", "Reasoning"),
+        BankItem("Alin ang halimbawa ng yamang mineral?", listOf("Ginto", "Palay", "Isda", "Kahoy"), 0, "Ang ginto ay yamang mineral.", "Concept"),
+        BankItem("Ano ang tawag sa pag-aaral ng lokasyon at anyong lupa?", listOf("Heograpiya", "Panitikan", "Pisika", "Musika"), 0, "Ang heograpiya ay nag-aaral ng lugar, lokasyon, at pisikal na katangian ng daigdig.", "Concept"),
+        BankItem("Tama o Mali: Ang mamamayan ay bahagi ng isang pamayanan.", listOf("Tama", "Mali"), 0, "Ang mga mamamayan ay bumubuo ng mga pamayanan.", "Tama / Mali")
+    )
+    "ICT" -> listOf(
+        BankItem("True or False: A strong password should be easy for everyone to guess.", listOf("True", "False"), 1, "Strong passwords should be difficult to guess.", "True / False"),
+        BankItem("Which file extension is commonly used for a plain text file?", listOf(".txt", ".mp3", ".png", ".exe"), 0, "The .txt extension is commonly used for plain text.", "Digital Literacy"),
+        BankItem("What should you do before opening an unknown email attachment?", listOf("Verify the sender and attachment", "Open immediately", "Forward to everyone", "Disable security"), 0, "Verify unexpected attachments before opening them.", "Safety"),
+        BankItem("Which is an example of cloud storage?", listOf("Online file storage", "A keyboard", "A monitor", "A USB cable"), 0, "Cloud storage stores files on remote servers accessed over the internet.", "Concept"),
+        BankItem("What does URL identify?", listOf("A web address", "A battery level", "A keyboard key", "A screen size"), 0, "URL means Uniform Resource Locator and identifies a web resource address.", "Concept"),
+        BankItem("True or False: Software updates can include security fixes.", listOf("True", "False"), 0, "Updates often include bug fixes and security patches.", "True / False")
+    )
+    "PE & Health" -> listOf(
+        BankItem("Tama o Mali: Mahalaga ang warm-up bago ang masiglang ehersisyo.", listOf("Tama", "Mali"), 0, "Ang warm-up ay naghahanda ng katawan para sa activity.", "Tama / Mali"),
+        BankItem("Ano ang dapat unahin kapag sobrang pagod na habang nag-eehersisyo?", listOf("Magpahinga at uminom ng tubig", "Dagdagan ang bilis", "Huwag pansinin", "Magpatuloy nang walang pahinga"), 0, "Mahalagang makinig sa katawan at magpahinga kapag kinakailangan.", "Scenario"),
+        BankItem("Alin ang mas mainam na source ng hydration sa regular na activity?", listOf("Tubig", "Soft drink lamang", "Candy", "Chips"), 0, "Tubig ay pangunahing paraan upang mapanatili ang hydration.", "Health"),
+        BankItem("Alin ang halimbawa ng flexibility exercise?", listOf("Stretching", "Typing", "Reading", "Watching TV"), 0, "Ang stretching ay tumutulong sa flexibility.", "Fitness"),
+        BankItem("Tama o Mali: Ang sapat na tulog ay bahagi ng healthy lifestyle.", listOf("Tama", "Mali"), 0, "Mahalaga ang sapat na pahinga para sa kalusugan at performance.", "Tama / Mali"),
+        BankItem("Ano ang magandang gawin kapag nahihilo habang nag-eehersisyo?", listOf("Huminto, magpahinga, at magsabi sa coach/trusted adult", "Dagdagan ang intensity", "Tumakbo nang mas mabilis", "Huwag pansinin"), 0, "Ang pagkahilo ay dahilan para huminto at humingi ng angkop na tulong.", "Scenario")
+    )
     else -> emptyList()
 }
 
@@ -2329,6 +2404,7 @@ private fun encodeQuestion(question: Question): JSONObject = JSONObject()
     .put("choices", encodeStrings(question.choices))
     .put("answer", question.answer)
     .put("explanation", question.explanation)
+    .put("type", question.type)
 
 private fun decodeQuestion(obj: JSONObject): Question = Question(
     obj.optString("id"),
@@ -2336,7 +2412,8 @@ private fun decodeQuestion(obj: JSONObject): Question = Question(
     obj.optString("text"),
     decodeStrings(obj.optString("choices", "[]")),
     obj.optInt("answer"),
-    obj.optString("explanation")
+    obj.optString("explanation"),
+    obj.optString("type", "Multiple Choice")
 )
 
 private fun encodeHistory(history: List<ReviewItem>): String {
