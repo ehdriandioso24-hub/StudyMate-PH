@@ -238,6 +238,33 @@ private fun StudyMateApp() {
     val levelXpProgress = levelXp / 1000f
 
 
+    fun saveProgress() {
+        subjectLevels[selectedSubject] = level
+        prefs.edit()
+            .putInt("level", level)
+            .putInt("level_$selectedSubject", level)
+            .putInt("answered", answered)
+            .putInt("correct", correct)
+            .putInt("coins", coins)
+            .putInt("xp", coins)
+            .putInt("dailyStreak", dailyStreak)
+            .putInt("item_5050", fiftyFiftyItems)
+            .putInt("item_time", extraTimeItems)
+            .putInt("item_skip", skipItems)
+            .putString("lastStudyDate", lastStudyDate)
+            .putString("dailyCompletedDate", dailyCompletedDate)
+            .putString("dailyLoginClaimDate", dailyLoginClaimDate)
+            .putString("answeredIds", encodeStrings(answeredIds))
+            .putString("history", encodeHistory(history))
+            .putString("customSubjects", encodeStrings(customSubjects))
+            .putString("importedQuestions", encodeQuestions(importedQuestions))
+            .putString("studentName", studentName)
+            .putString("studentEmail", studentEmail)
+            .putBoolean("loggedIn", loggedIn)
+            .apply()
+    }
+
+
     fun openQuickQuiz() {
         val pool = makeQuestions("Mixed", level)
             .filter { it.id !in answeredIds }
@@ -268,31 +295,6 @@ private fun StudyMateApp() {
         }
     }
 
-    fun saveProgress() {
-        subjectLevels[selectedSubject] = level
-        prefs.edit()
-            .putInt("level", level)
-            .putInt("level_$selectedSubject", level)
-            .putInt("answered", answered)
-            .putInt("correct", correct)
-            .putInt("coins", coins)
-            .putInt("xp", coins)
-            .putInt("dailyStreak", dailyStreak)
-            .putInt("item_5050", fiftyFiftyItems)
-            .putInt("item_time", extraTimeItems)
-            .putInt("item_skip", skipItems)
-            .putString("lastStudyDate", lastStudyDate)
-            .putString("dailyCompletedDate", dailyCompletedDate)
-            .putString("dailyLoginClaimDate", dailyLoginClaimDate)
-            .putString("answeredIds", encodeStrings(answeredIds))
-            .putString("history", encodeHistory(history))
-            .putString("customSubjects", encodeStrings(customSubjects))
-            .putString("importedQuestions", encodeQuestions(importedQuestions))
-            .putString("studentName", studentName)
-            .putString("studentEmail", studentEmail)
-            .putBoolean("loggedIn", loggedIn)
-            .apply()
-    }
 
     fun claimDailyLoginCoins() {
         val today = LocalDate.now().toString()
