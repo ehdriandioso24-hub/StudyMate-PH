@@ -26,7 +26,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 private enum class Screen {
-    HOME, SUBJECTS, SEARCH, QUIZ, NOTES, FLASHCARDS, TIMER, PROGRESS, REVIEW, PROFILE, SETTINGS
+    HOME, SUBJECTS, SEARCH, QUIZ, LEVEL_UP, LEVEL_COMPLETE, NOTES, FLASHCARDS, TIMER, PROGRESS, REVIEW, PROFILE, SETTINGS
 }
 
 private data class Note(val id: Long, val title: String, val body: String)
@@ -160,6 +160,7 @@ private fun StudyMateApp() {
 
     var questions by remember { mutableStateOf(emptyList<Question>()) }
     var questionIndex by rememberSaveable { mutableIntStateOf(0) }
+    var levelUpFrom by rememberSaveable { mutableIntStateOf(1) }
     var selectedAnswer by rememberSaveable { mutableIntStateOf(-1) }
     var revealed by rememberSaveable { mutableStateOf(false) }
     var showSubjectDialog by remember { mutableStateOf(false) }
@@ -466,29 +467,15 @@ private fun StudyMateApp() {
                             Text("＋ Add Custom Subject")
                         }
 
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            OutlinedButton(
-                                onClick = {
-                                    level = (level - 1).coerceAtLeast(1)
-                                    saveProgress()
-                                },
-                                modifier = Modifier.weight(1f)
-                            ) {
-                                Text("Previous Level")
-                            }
-
-                            Button(
-                                onClick = {
-                                    level = (level + 1).coerceAtMost(100)
-                                    saveProgress()
-                                },
-                                modifier = Modifier.weight(1f)
-                            ) {
-                                Text("Next Level ↑")
-                            }
-                        }
-
-                        Text("Level $level / 100", color = muted)
+                        Text(
+                            "🎯 Current Level: $level / 100",
+                            color = muted,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Text(
+                            "Complete the available questions to unlock the next level automatically.",
+                            color = muted
+                        )
                     }
 
                     Screen.SEARCH -> {
@@ -579,18 +566,14 @@ private fun StudyMateApp() {
                         if (q == null) {
                             CardBox(
                                 "No new questions in this set",
-                                "Try another subject or move to the next level."
+                                "There are no unanswered questions available for this subject at this level. Choose another subject or return to Subjects."
                             ) {}
 
                             Button(
-                                onClick = {
-                                    level = (level + 1).coerceAtMost(100)
-                                    saveProgress()
-                                    startQuiz(selectedSubject)
-                                },
+                                onClick = { screen = Screen.SUBJECTS.name },
                                 modifier = Modifier.fillMaxWidth()
                             ) {
-                                Text("Try Next Level")
+                                Text("Back to Subjects")
                             }
                         } else {
                             Card(
@@ -665,19 +648,125 @@ private fun StudyMateApp() {
 
                                         Button(
                                             onClick = {
-                                                questionIndex++
-                                                selectedAnswer = -1
-                                                revealed = false
-
-                                                if (questionIndex >= questions.size) {
-                                                    screen = Screen.PROGRESS.name
+                                                if (questionIndex >= questions.lastIndex) {
+                                                    // The final question in this quiz set is complete.
+                                                    if (level < 100) {
+                                                        levelUpFrom = level
+                                                        level = (level + 1).coerceAtMost(100)
+                                                        saveProgress()
+                                                        screen = Screen.LEVEL_UP.name
+                                                    } else {
+                                                        saveProgress()
+                                                        screen = Screen.LEVEL_COMPLETE.name
+                                                    }
+                                                } else {
+                                                    questionIndex++
+                                                    selectedAnswer = -1
+                                                    revealed = false
                                                 }
                                             },
                                             modifier = Modifier.fillMaxWidth()
                                         ) {
-                                            Text("Next Question →")
+                                            Text(
+                                                if (questionIndex >= questions.lastIndex) {
+                                                    if (level >= 100) "Complete Level 100 🏆" else "Finish Level →"
+                                                } else {
+                                                    "Next Question →"
+                                                }
+                                            )
                                         }
                                     }
+                                }
+                            }
+                        }
+                    }
+
+                    Screen.LEVEL_UP -> {
+                        Box(
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 28.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Column(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(16.dp)
+                            ) {
+                                Text("🎉", style = MaterialTheme.typography.displayLarge)
+                                Text(
+                                    "LEVEL UP!",
+                                    style = MaterialTheme.typography.displaySmall,
+                                    color = colors.primary,
+                                    fontWeight = FontWeight.ExtraBold
+                                )
+                                Text(
+                                    "Level $levelUpFrom completed!",
+                                    style = MaterialTheme.typography.titleLarge,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    "Welcome to Level $level!",
+                                    style = MaterialTheme.typography.headlineSmall,
+                                    color = colors.secondary,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    "Your new level has been saved automatically. Keep learning and reach Level 100!",
+                                    color = muted
+                                )
+                                CardBox("💾 Progress saved", "You can close the app and return to Level $level.") {}
+                                Button(
+                                    onClick = { startQuiz(selectedSubject) },
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text("Continue to Level $level →")
+                                }
+                                OutlinedButton(
+                                    onClick = { screen = Screen.SUBJECTS.name },
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text("Choose Another Subject")
+                                }
+                            }
+                        }
+                    }
+
+                    Screen.LEVEL_COMPLETE -> {
+                        Box(
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 28.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Column(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(16.dp)
+                            ) {
+                                Text("🏆", style = MaterialTheme.typography.displayLarge)
+                                Text(
+                                    "LEVEL 100 COMPLETE!",
+                                    style = MaterialTheme.typography.headlineMedium,
+                                    color = colors.primary,
+                                    fontWeight = FontWeight.ExtraBold
+                                )
+                                Text(
+                                    "Congratulations! You have reached the highest level.",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    "Your progress is saved. You can keep practicing or review your answers.",
+                                    color = muted
+                                )
+                                Button(
+                                    onClick = { screen = Screen.SUBJECTS.name },
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text("Back to Subjects")
+                                }
+                                OutlinedButton(
+                                    onClick = { screen = Screen.PROGRESS.name },
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text("View Progress")
                                 }
                             }
                         }
