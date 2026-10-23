@@ -217,8 +217,7 @@ private fun StudyMateApp() {
     var dailyChallengeActive by rememberSaveable { mutableStateOf(false) }
     val localLeaderboard = remember {
         mutableStateListOf<String>().apply {
-            addAll((prefs.getString("localLeaderboard", "") ?: "").split("
-").filter { it.isNotBlank() })
+            addAll((prefs.getString("localLeaderboard", "") ?: "").split("\n").filter { it.isNotBlank() })
         }
     }
     var showSubjectDialog by remember { mutableStateOf(false) }
@@ -389,8 +388,7 @@ private fun StudyMateApp() {
         val sorted = localLeaderboard.sortedByDescending { it.substringBefore('|').toIntOrNull() ?: 0 }.take(10)
         localLeaderboard.clear()
         localLeaderboard.addAll(sorted)
-        prefs.edit().putString("localLeaderboard", localLeaderboard.joinToString("
-")).apply()
+        prefs.edit().putString("localLeaderboard", localLeaderboard.joinToString("\n")).apply()
     }
 
     fun recordAnswer(index: Int, timedOut: Boolean = false) {
@@ -626,8 +624,7 @@ private fun StudyMateApp() {
                         CardBox("📝 Total Answered", "$answered questions") {}
                         CardBox("✅ Correct Answers", "$correct correct") {}
                         CardBox("🔥 Current Streak", "$dailyStreak days") {}
-                        CardBox("🏆 Local Leaderboard", if (localLeaderboard.isEmpty()) "No records yet." else localLeaderboard.joinToString("
-")) {}
+                        CardBox("🏆 Local Leaderboard", if (localLeaderboard.isEmpty()) "No records yet." else localLeaderboard.joinToString("\n")) {}
                     }
 
                     Screen.SEARCH -> {
