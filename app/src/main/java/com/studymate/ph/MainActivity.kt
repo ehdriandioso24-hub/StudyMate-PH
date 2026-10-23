@@ -9,8 +9,6 @@ import java.time.temporal.ChronoUnit
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -359,6 +357,104 @@ private fun StudyMateApp() {
         screen = Screen.QUIZ.name
     }
 
+    fun retryCurrentQuiz() {
+        questionIndex = 0
+        selectedAnswer = -1
+        revealed = false
+        secondsLeft = 30
+        lives = 3
+        streak = 0
+        quizCorrect = 0
+        quizScore = 0
+        used5050 = false
+        usedTimeFreeze = false
+        usedSkip = false
+        free5050 = true
+        freeTime = true
+        freeSkip = true
+        hiddenChoices = emptySet()
+        quizResultSaved = false
+        quizStartedAt = System.currentTimeMillis()
+        dailyChallengeActive = false
+        questions = questions.shuffled()
+        screen = Screen.QUIZ.name
+    }
+
+    fun saveQuizResult() {
+        if (quizResultSaved) return
+        quizResultSaved = true
+        val elapsedSeconds = ((System.currentTimeMillis() - quizStartedAt) / 1000L).toInt().coerceAtLeast(1)
+        val entry = "${quizScore.coerceAtLeast(0)}|$quizCorrect|$elapsedSeconds|${studentName.ifBlank { "Student" }}"
+        localLeaderboard.add(entry)
+        val sorted = localLeaderboard.sortedByDescending { it.substringBefore('|').toIntOrNull() ?: 0 }.take(10)
+        localLeaderboard.clear()
+        localLeaderboard.addAll(sorted)
+        prefs.edit().putString("localLeaderboard", localLeaderboard.joinToString("
+")).apply()
+    }
+
+    fun recordAnswer(index: Int, timedOut: Boolean = false) {
+        val q = questions.getOrNull(questionIndex) ?: return
+        if (revealed) return
+        selectedAnswer = if (timedOut) -1 else index
+        revealed = true
+        val isCorrect = !timedOut && index == q.answer
+        answered++
+        if (isCorrect) {
+            correct++
+            quizCorrect++
+            streak++
+            val speedBonus = (secondsLeft * 2).coerceAtLeast(0)
+            val comboBonus = if (streak >= 5) 100 else if (streak >= 3) 50 else 0
+            quizScore += 100 + speedBonus + comboBonus
+            coins += 10 + (speedBonus / 2) + if (streak >= 5) 10 else 0
+        } else {
+            lives = (lives - 1).coerceAtLeast(0)
+            streak = 0
+        }
+        answeredIds.add(q.id)
+        history.add(0, ReviewItem(q, selectedAnswer, isCorrect, level))
+        while (history.size > 500) history.removeAt(history.lastIndex)
+        saveProgress()
+        if (lives <= 0) {
+            saveQuizResult()
+            screen = Screen.GAME_OVER.name
+        }
+    }
+
+    fun finishQuiz() {
+        saveQuizResult()
+        val total = questions.size.coerceAtLeast(1)
+        val passNeeded = kotlin.math.ceil(total * 0.75).toInt()
+        if (quizCorrect >= passNeeded) {
+            if (dailyChallengeActive) {
+                val today = LocalDate.now().toString()
+                if (dailyCompletedDate != today) {
+                    dailyStreak = if (lastStudyDate.isNotBlank()) {
+                        val gap = runCatching { ChronoUnit.DAYS.between(LocalDate.parse(lastStudyDate), LocalDate.parse(today)) }.getOrDefault(99L)
+                        if (gap == 1L) dailyStreak + 1 else 1
+                    } else 1
+                    lastStudyDate = today
+                    dailyCompletedDate = today
+                    coins += 100
+                    saveProgress()
+                }
+                dailyChallengeActive = false
+            }
+            if (level < 100) {
+                levelUpFrom = level
+                level = (level + 1).coerceAtMost(100)
+                saveProgress()
+                screen = Screen.LEVEL_UP.name
+            } else {
+                saveProgress()
+                screen = Screen.LEVEL_COMPLETE.name
+            }
+        } else {
+            screen = Screen.GAME_OVER.name
+        }
+    }
+
     val currentScreen = runCatching {
         Screen.valueOf(screen)
     }.getOrDefault(Screen.HOME)
@@ -400,7 +496,7 @@ private fun StudyMateApp() {
                 when (currentScreen) {
                     Screen.HOME -> {
                         NeonHeroCard(
-                            name = if (studentName.isNotBlank()) studentName else "ehdz",
+                            name = if (studentName.isNotBlank()) studentName else "Student",
                             level = level,
                             coins = coins,
                             xp = levelXp,
@@ -2225,9 +2321,9 @@ private fun decodeHistory(raw: String): List<ReviewItem> = runCatching {
     (0 until array.length()).map {
         val obj = array.getJSONObject(it)
         val question = decodeQuestion(obj.getJSONObject("question"))
-        val levelFromQuestion = Regex("(?:-L|Level\s+)(\d+)", RegexOption.IGNORE_CASE)
+        val levelFromQuestion = Regex("(?:-L|Level\\s+)(\\d+)", RegexOption.IGNORE_CASE)
             .find(question.id)?.groupValues?.getOrNull(1)?.toIntOrNull()
-            ?: Regex("Level\s+(\d+)", RegexOption.IGNORE_CASE)
+            ?: Regex("Level\\s+(\\d+)", RegexOption.IGNORE_CASE)
                 .find(question.text)?.groupValues?.getOrNull(1)?.toIntOrNull()
             ?: 1
         ReviewItem(
