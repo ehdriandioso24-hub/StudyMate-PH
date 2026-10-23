@@ -268,6 +268,7 @@ private fun StudyMateApp() {
         }
     }
 
+    fun saveProgress() {
         subjectLevels[selectedSubject] = level
         prefs.edit()
             .putInt("level", level)
