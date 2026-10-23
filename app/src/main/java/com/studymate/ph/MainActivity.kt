@@ -2,6 +2,8 @@
 package com.studymate.ph
 
 import android.content.Context
+import android.media.AudioManager
+import android.media.ToneGenerator
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
@@ -26,7 +28,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 private enum class Screen {
-    HOME, SUBJECTS, SEARCH, QUIZ, LEVEL_UP, LEVEL_COMPLETE, NOTES, FLASHCARDS, TIMER, PROGRESS, REVIEW, PROFILE, SETTINGS
+    HOME, SUBJECTS, SEARCH, QUIZ, LEVEL_UP, LEVEL_COMPLETE, GAME_OVER, NOTES, FLASHCARDS, TIMER, PROGRESS, REVIEW, PROFILE, SETTINGS
 }
 
 private data class Note(val id: Long, val title: String, val body: String)
@@ -114,6 +116,9 @@ private fun StudyMateApp() {
     var lightTheme by remember {
         mutableStateOf(prefs.getBoolean("lightTheme", false))
     }
+    var tickingSound by remember { mutableStateOf(prefs.getBoolean("tickingSound", true)) }
+    val toneGenerator = remember { ToneGenerator(AudioManager.STREAM_MUSIC, 55) }
+    DisposableEffect(Unit) { onDispose { toneGenerator.release() } }
 
     var loading by rememberSaveable { mutableStateOf(true) }
     var loggedIn by remember {
@@ -163,6 +168,22 @@ private fun StudyMateApp() {
     var levelUpFrom by rememberSaveable { mutableIntStateOf(1) }
     var selectedAnswer by rememberSaveable { mutableIntStateOf(-1) }
     var revealed by rememberSaveable { mutableStateOf(false) }
+    var secondsLeft by rememberSaveable { mutableIntStateOf(30) }
+    var lives by rememberSaveable { mutableIntStateOf(3) }
+    var streak by rememberSaveable { mutableIntStateOf(0) }
+    var quizCorrect by rememberSaveable { mutableIntStateOf(0) }
+    var quizScore by rememberSaveable { mutableIntStateOf(0) }
+    var used5050 by rememberSaveable { mutableStateOf(false) }
+    var usedTimeFreeze by rememberSaveable { mutableStateOf(false) }
+    var usedSkip by rememberSaveable { mutableStateOf(false) }
+    var hiddenChoices by remember { mutableStateOf(setOf<Int>()) }
+    var quizResultSaved by rememberSaveable { mutableStateOf(false) }
+    var quizStartedAt by rememberSaveable { mutableLongStateOf(System.currentTimeMillis()) }
+    val localLeaderboard = remember {
+        mutableStateListOf<String>().apply {
+            addAll((prefs.getString("localLeaderboard", "") ?: "").split("\n").filter { it.isNotBlank() })
+        }
+    }
     var showSubjectDialog by remember { mutableStateOf(false) }
     var subjectInput by rememberSaveable { mutableStateOf("") }
 
@@ -186,6 +207,17 @@ private fun StudyMateApp() {
         questionIndex = 0
         selectedAnswer = -1
         revealed = false
+        secondsLeft = 30
+        lives = 3
+        streak = 0
+        quizCorrect = 0
+        quizScore = 0
+        used5050 = false
+        usedTimeFreeze = false
+        usedSkip = false
+        hiddenChoices = emptySet()
+        quizResultSaved = false
+        quizStartedAt = System.currentTimeMillis()
 
         val builtIn = makeQuestions(subject, level)
         val imported = importedQuestions.filter {
@@ -197,9 +229,104 @@ private fun StudyMateApp() {
         screen = Screen.QUIZ.name
     }
 
+    fun retryCurrentQuiz() {
+        questionIndex = 0
+        selectedAnswer = -1
+        revealed = false
+        secondsLeft = 30
+        lives = 3
+        streak = 0
+        quizCorrect = 0
+        quizScore = 0
+        used5050 = false
+        usedTimeFreeze = false
+        usedSkip = false
+        hiddenChoices = emptySet()
+        quizResultSaved = false
+        quizStartedAt = System.currentTimeMillis()
+        questions = questions.shuffled()
+        screen = Screen.QUIZ.name
+    }
+
+    fun saveQuizResult() {
+        if (quizResultSaved) return
+        quizResultSaved = true
+        val elapsedSeconds = ((System.currentTimeMillis() - quizStartedAt) / 1000L).toInt().coerceAtLeast(1)
+        val entry = "${quizScore.coerceAtLeast(0)}|$quizCorrect|$elapsedSeconds|${studentName.ifBlank { "Student" }}"
+        localLeaderboard.add(entry)
+        val sorted = localLeaderboard.sortedByDescending { it.substringBefore('|').toIntOrNull() ?: 0 }.take(10)
+        localLeaderboard.clear()
+        localLeaderboard.addAll(sorted)
+        prefs.edit().putString("localLeaderboard", localLeaderboard.joinToString("\n")).apply()
+    }
+
+    fun recordAnswer(index: Int, timedOut: Boolean = false) {
+        val q = questions.getOrNull(questionIndex) ?: return
+        if (revealed) return
+        selectedAnswer = if (timedOut) -1 else index
+        revealed = true
+        val isCorrect = !timedOut && index == q.answer
+        answered++
+        if (isCorrect) {
+            correct++
+            quizCorrect++
+            streak++
+            val speedBonus = (secondsLeft * 2).coerceAtLeast(0)
+            val comboBonus = if (streak >= 5) 100 else if (streak >= 3) 50 else 0
+            quizScore += 100 + speedBonus + comboBonus
+        } else {
+            lives = (lives - 1).coerceAtLeast(0)
+            streak = 0
+        }
+        answeredIds.add(q.id)
+        history.add(0, ReviewItem(q, selectedAnswer, isCorrect))
+        while (history.size > 500) history.removeAt(history.lastIndex)
+        saveProgress()
+        if (lives <= 0) {
+            saveQuizResult()
+            screen = Screen.GAME_OVER.name
+        }
+    }
+
+    fun finishQuiz() {
+        saveQuizResult()
+        val total = questions.size.coerceAtLeast(1)
+        val passNeeded = kotlin.math.ceil(total * 0.75).toInt()
+        if (quizCorrect >= passNeeded) {
+            if (level < 100) {
+                levelUpFrom = level
+                level = (level + 1).coerceAtMost(100)
+                saveProgress()
+                screen = Screen.LEVEL_UP.name
+            } else {
+                saveProgress()
+                screen = Screen.LEVEL_COMPLETE.name
+            }
+        } else {
+            screen = Screen.GAME_OVER.name
+        }
+    }
+
     val currentScreen = runCatching {
         Screen.valueOf(screen)
     }.getOrDefault(Screen.HOME)
+
+    LaunchedEffect(currentScreen, questionIndex, revealed, secondsLeft) {
+        if (currentScreen == Screen.QUIZ && questions.getOrNull(questionIndex) != null && !revealed) {
+            if (secondsLeft > 0) {
+                delay(1000)
+                secondsLeft = (secondsLeft - 1).coerceAtLeast(0)
+            } else {
+                recordAnswer(-1, timedOut = true)
+            }
+        }
+    }
+
+    LaunchedEffect(currentScreen, questionIndex, revealed, secondsLeft, tickingSound) {
+        if (currentScreen == Screen.QUIZ && !revealed && tickingSound && secondsLeft in 1..10) {
+            toneGenerator.startTone(ToneGenerator.TONE_PROP_BEEP, 90)
+        }
+    }
 
     BackHandler(enabled = currentScreen != Screen.HOME) {
         screen = when (currentScreen) {
@@ -559,9 +686,39 @@ private fun StudyMateApp() {
                         val q = questions.getOrNull(questionIndex)
 
                         Heading(
-                            "🧠 $selectedSubject Quiz",
-                            "Level $level • Question ${if (q == null) 0 else questionIndex + 1}/${questions.size}"
+                            "🔥 $selectedSubject Thrill Quiz",
+                            "Level $level • Question ${if (q == null) 0 else questionIndex + 1}/${questions.size} • Pass: 75%"
                         )
+
+                        if (q != null) {
+                            CardBox(
+                                "${if (secondsLeft <= 10) "🚨 RED ZONE" else "⏱️ Time left"} • ${secondsLeft}s",
+                                "❤️ Lives: ${"♥ ".repeat(lives).trim()}${if (lives == 0) "—" else ""}   🔥 Streak: $streak   ⭐ Score: $quizScore"
+                            ) {}
+                            if (secondsLeft <= 10) {
+                                Text("Hurry! Red Zone!", color = Color(0xFFFF5252), fontWeight = FontWeight.ExtraBold)
+                            }
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                                OutlinedButton(onClick = {
+                                    if (!used5050 && !revealed) {
+                                        used5050 = true
+                                        val wrong = q.choices.indices.filter { it != q.answer }.shuffled().take(2)
+                                        hiddenChoices = wrong.toSet()
+                                    }
+                                }, enabled = !used5050 && !revealed, modifier = Modifier.weight(1f)) { Text("50:50") }
+                                OutlinedButton(onClick = {
+                                    if (!usedTimeFreeze && !revealed) { usedTimeFreeze = true; secondsLeft += 15 }
+                                }, enabled = !usedTimeFreeze && !revealed, modifier = Modifier.weight(1f)) { Text("+15 sec") }
+                                OutlinedButton(onClick = {
+                                    if (!usedSkip && !revealed) {
+                                        usedSkip = true
+                                        if (questionIndex >= questions.lastIndex) finishQuiz() else {
+                                            questionIndex++; selectedAnswer = -1; revealed = false; secondsLeft = 30; hiddenChoices = emptySet()
+                                        }
+                                    }
+                                }, enabled = !usedSkip && !revealed, modifier = Modifier.weight(1f)) { Text("Skip") }
+                            }
+                        }
 
                         if (q == null) {
                             CardBox(
@@ -579,7 +736,7 @@ private fun StudyMateApp() {
                             Card(
                                 modifier = Modifier.fillMaxWidth(),
                                 colors = CardDefaults.cardColors(
-                                    containerColor = colors.surface
+                                    containerColor = if (secondsLeft <= 10 && !revealed) Color(0xFF5B1018) else colors.surface
                                 )
                             ) {
                                 Column(
@@ -598,47 +755,31 @@ private fun StudyMateApp() {
                                     )
 
                                     q.choices.forEachIndexed { i, choice ->
-                                        OutlinedButton(
-                                            onClick = {
-                                                if (!revealed) {
-                                                    selectedAnswer = i
-                                                    revealed = true
-
-                                                    val isCorrect = i == q.answer
-                                                    answered++
-                                                    if (isCorrect) correct++
-
-                                                    answeredIds.add(q.id)
-                                                    history.add(
-                                                        0,
-                                                        ReviewItem(q, i, isCorrect)
-                                                    )
-
-                                                    while (history.size > 500) {
-                                                        history.removeAt(history.lastIndex)
+                                        if (i !in hiddenChoices || revealed) {
+                                            OutlinedButton(
+                                                onClick = { recordAnswer(i) },
+                                                enabled = !revealed,
+                                                modifier = Modifier.fillMaxWidth()
+                                            ) {
+                                                Text(
+                                                    when {
+                                                        revealed && i == q.answer -> "✓ $choice"
+                                                        revealed && i == selectedAnswer -> "✕ $choice"
+                                                        else -> choice
                                                     }
-
-                                                    saveProgress()
-                                                }
-                                            },
-                                            modifier = Modifier.fillMaxWidth()
-                                        ) {
-                                            Text(
-                                                when {
-                                                    revealed && i == q.answer -> "✓ $choice"
-                                                    revealed && i == selectedAnswer -> "✕ $choice"
-                                                    else -> choice
-                                                }
-                                            )
+                                                )
+                                            }
                                         }
                                     }
 
                                     if (revealed) {
                                         Text(
                                             if (selectedAnswer == q.answer) {
-                                                "Correct! 🎉"
+                                                if (streak >= 5) "🔥 COMBO FIRE! 5+ streak! + bonus points!" else if (streak >= 3) "🔥 COMBO! 3+ streak! Bonus points!" else "Correct! 🎉 + speed bonus"
+                                            } else if (selectedAnswer == -1) {
+                                                "⏰ Time's up! Correct answer shown below."
                                             } else {
-                                                "Review the correct answer."
+                                                "Incorrect — one life lost. Review the correct answer."
                                             },
                                             color = colors.secondary,
                                             fontWeight = FontWeight.Bold
@@ -648,28 +789,24 @@ private fun StudyMateApp() {
 
                                         Button(
                                             onClick = {
-                                                if (questionIndex >= questions.lastIndex) {
-                                                    // The final question in this quiz set is complete.
-                                                    if (level < 100) {
-                                                        levelUpFrom = level
-                                                        level = (level + 1).coerceAtMost(100)
-                                                        saveProgress()
-                                                        screen = Screen.LEVEL_UP.name
-                                                    } else {
-                                                        saveProgress()
-                                                        screen = Screen.LEVEL_COMPLETE.name
-                                                    }
+                                                if (lives <= 0) {
+                                                    saveQuizResult()
+                                                    screen = Screen.GAME_OVER.name
+                                                } else if (questionIndex >= questions.lastIndex) {
+                                                    finishQuiz()
                                                 } else {
                                                     questionIndex++
                                                     selectedAnswer = -1
                                                     revealed = false
+                                                    secondsLeft = 30
+                                                    hiddenChoices = emptySet()
                                                 }
                                             },
                                             modifier = Modifier.fillMaxWidth()
                                         ) {
                                             Text(
                                                 if (questionIndex >= questions.lastIndex) {
-                                                    if (level >= 100) "Complete Level 100 🏆" else "Finish Level →"
+                                                    if (level >= 100) "Finish Quiz • Level 100 🏆" else "Finish Quiz →"
                                                 } else {
                                                     "Next Question →"
                                                 }
@@ -772,6 +909,17 @@ private fun StudyMateApp() {
                         }
                     }
 
+                    Screen.GAME_OVER -> {
+                        Heading("💥 Quiz Over", "Thrill Quiz results")
+                        CardBox(
+                            "${if (lives <= 0) "Out of lives!" else "Passing score not reached."}",
+                            "Correct answers: $quizCorrect / ${questions.size}\nScore: $quizScore\nPassing target: ${kotlin.math.ceil(questions.size.coerceAtLeast(1) * 0.75).toInt()} correct answers (75%).\nYour progress and review history are saved."
+                        ) {}
+                        Button(onClick = { retryCurrentQuiz() }, modifier = Modifier.fillMaxWidth()) { Text("Try Again") }
+                        OutlinedButton(onClick = { screen = Screen.PROGRESS.name }, modifier = Modifier.fillMaxWidth()) { Text("View Progress & Leaderboard") }
+                        OutlinedButton(onClick = { screen = Screen.SUBJECTS.name }, modifier = Modifier.fillMaxWidth()) { Text("Choose Another Subject") }
+                    }
+
                     Screen.NOTES -> NotesPage(
                         notes = notes,
                         onSave = { title, body ->
@@ -820,6 +968,10 @@ private fun StudyMateApp() {
                         CardBox("Accuracy", "$accuracy%") {}
                         CardBox("Current level", "$level / 100") {}
                         CardBox("🏆 Achievements", achievementsFor(answered, correct).joinToString(" • "))
+                        CardBox("🏁 Local Top 10 Leaderboard", if (localLeaderboard.isEmpty()) "Complete a Thrill Quiz to appear here." else localLeaderboard.mapIndexed { index, entry ->
+                            val parts = entry.split('|')
+                            "${index + 1}. ${parts.getOrElse(3) { "Student" }} — ${parts.getOrElse(0) { "0" }} pts (${parts.getOrElse(1) { "0" }} correct, ${parts.getOrElse(2) { "0" }} sec)"
+                        }.joinToString("\n")) {}
 
                         Button(
                             onClick = { screen = Screen.REVIEW.name },
@@ -896,6 +1048,25 @@ private fun StudyMateApp() {
                             Switch(
                                 checked = lightTheme,
                                 onCheckedChange = { lightTheme = it }
+                            )
+                        }
+
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text("Red Zone ticking sound")
+                                Text("Beeps during the final 10 seconds of a question.", color = muted, style = MaterialTheme.typography.bodySmall)
+                            }
+                            Switch(
+                                checked = tickingSound,
+                                onCheckedChange = {
+                                    tickingSound = it
+                                    prefs.edit().putBoolean("tickingSound", it).apply()
+                                }
                             )
                         }
 
