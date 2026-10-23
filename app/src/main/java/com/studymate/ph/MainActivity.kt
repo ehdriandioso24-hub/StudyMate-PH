@@ -1723,67 +1723,176 @@ private fun emoji(subject: String): String = when (subject) {
 }
 
 private fun makeQuestions(subject: String, level: Int): List<Question> {
+    // Keep all previous quiz features, but make the new levels progressively harder.
+    // Mixed now covers every subject while retaining the same saved-progress system.
     val subjects = if (subject == "Mixed") {
-        listOf("Math", "Science", "English", "Filipino")
+        listOf("Math", "Science", "English", "Filipino", "Araling Panlipunan", "ICT", "PE & Health")
     } else {
         listOf(subject)
     }
 
     val result = mutableListOf<Question>()
+    val tier = when {
+        level <= 20 -> 1
+        level <= 40 -> 2
+        level <= 60 -> 3
+        level <= 80 -> 4
+        else -> 5
+    }
 
     subjects.forEach { name ->
         if (name == "Math") {
             for (n in 1..40) {
+                val seed = level * 97 + n * 13
                 val a = level + n + 2
                 val b = (n % 9) + 2
-                val operation = when ((n + level) % 4) {
-                    0 -> "+"
-                    1 -> "-"
-                    2 -> "×"
-                    else -> "÷"
-                }
 
-                val x: Int
-                val y: Int
                 val answer: Int
                 val text: String
 
-                when (operation) {
-                    "+" -> {
-                        x = a
-                        y = b + level / 5
-                        answer = x + y
-                        text = "$x + $y = ?"
+                when (tier) {
+                    1 -> {
+                        when ((n + level) % 3) {
+                            0 -> {
+                                val x = a
+                                val y = b + level / 10
+                                answer = x + y
+                                text = "$x + $y = ?"
+                            }
+                            1 -> {
+                                val x = a + b
+                                answer = x - b
+                                text = "$x − $b = ?"
+                            }
+                            else -> {
+                                val x = (level % 8) + 2
+                                answer = x * b
+                                text = "$x × $b = ?"
+                            }
+                        }
                     }
-                    "-" -> {
-                        x = a + b
-                        y = b
-                        answer = x - y
-                        text = "$x - $y = ?"
+                    2 -> {
+                        when ((n + level) % 4) {
+                            0 -> {
+                                val x = a + b
+                                val y = b + (n % 4)
+                                answer = x + y
+                                text = "$x + $y = ?"
+                            }
+                            1 -> {
+                                val x = a + b + 5
+                                val y = b + 2
+                                answer = x - y
+                                text = "$x − $y = ?"
+                            }
+                            2 -> {
+                                val x = (level % 10) + 3
+                                val y = b + 2
+                                answer = x * y
+                                text = "$x × $y = ?"
+                            }
+                            else -> {
+                                val y = b + 1
+                                val x = y * ((n % 8) + 3)
+                                answer = x / y
+                                text = "$x ÷ $y = ?"
+                            }
+                        }
                     }
-                    "×" -> {
-                        x = (level % 12) + 2
-                        y = b
-                        answer = x * y
-                        text = "$x × $y = ?"
+                    3 -> {
+                        when ((n + level) % 4) {
+                            0 -> {
+                                val x = a + 10
+                                val y = b + 3
+                                val z = (n % 5) + 2
+                                answer = x + y - z
+                                text = "($x + $y) − $z = ?"
+                            }
+                            1 -> {
+                                val x = (level % 12) + 4
+                                val y = b + 2
+                                val z = n % 4 + 1
+                                answer = x * y + z
+                                text = "($x × $y) + $z = ?"
+                            }
+                            2 -> {
+                                val x = a + b + 12
+                                val y = b + 4
+                                val z = (n % 6) + 2
+                                answer = x - y + z
+                                text = "$x − $y + $z = ?"
+                            }
+                            else -> {
+                                val y = b + 2
+                                val quotient = (n % 8) + 4
+                                val x = y * quotient
+                                answer = quotient + (n % 3)
+                                text = "$x ÷ $y + ${n % 3} = ?"
+                            }
+                        }
+                    }
+                    4 -> {
+                        val x = (level % 15) + n + 10
+                        val y = (n % 7) + 3
+                        val z = (level % 5) + 2
+                        when ((seed % 4)) {
+                            0 -> {
+                                answer = x * y - z
+                                text = "$x × $y − $z = ?"
+                            }
+                            1 -> {
+                                answer = x + y * z
+                                text = "$x + ($y × $z) = ?"
+                            }
+                            2 -> {
+                                answer = (x - y) * z
+                                text = "($x − $y) × $z = ?"
+                            }
+                            else -> {
+                                answer = x * y + z
+                                text = "($x × $y) + $z = ?"
+                            }
+                        }
                     }
                     else -> {
-                        x = b * ((n % 10) + 2)
-                        y = b
-                        answer = x / y
-                        text = "$x ÷ $y = ?"
+                        val x = (level % 20) + n + 15
+                        val y = (n % 8) + 4
+                        val z = (level % 9) + 3
+                        when (seed % 5) {
+                            0 -> {
+                                answer = x * y - z * 2
+                                text = "($x × $y) − ($z × 2) = ?"
+                            }
+                            1 -> {
+                                answer = (x + z) * y - z
+                                text = "($x + $z) × $y − $z = ?"
+                            }
+                            2 -> {
+                                answer = x * (y + z) - y
+                                text = "$x × ($y + $z) − $y = ?"
+                            }
+                            3 -> {
+                                answer = (x - z) * y + z
+                                text = "($x − $z) × $y + $z = ?"
+                            }
+                            else -> {
+                                answer = x + y * z - 2
+                                text = "$x + ($y × $z) − 2 = ?"
+                            }
+                        }
                     }
                 }
 
-                // Make Math choices less predictable: use close, plausible distractors
-                // and randomize their positions so the correct answer is not always obvious.
+                // Plausible, close distractors. Their positions are randomized.
                 val distractors = linkedSetOf(
                     answer + 1,
                     answer - 1,
                     answer + 2,
                     answer - 2,
                     answer + 3,
-                    answer - 3
+                    answer - 3,
+                    answer + 5,
+                    answer - 5
                 ).filter { it >= 0 && it != answer }.shuffled().take(3)
                 val options = (distractors + answer).shuffled()
 
@@ -1791,27 +1900,38 @@ private fun makeQuestions(subject: String, level: Int): List<Question> {
                     Question(
                         "Math-L$level-Q$n",
                         "Math",
-                        text,
+                        "Level $level • ${difficultyName(level)}: $text",
                         options.map { it.toString() },
                         options.indexOf(answer),
-                        "The correct answer is $answer."
+                        "Difficulty: ${difficultyName(level)}. Solve using the correct order of operations where needed. The correct answer is $answer."
                     )
                 )
             }
         } else {
             questionBank(name).forEachIndexed { i, item ->
-                // Shuffle choices for every generated question. The answer index must
-                // follow the shuffled list so the correct option is not predictable.
+                // The same saved answeredIds mechanism remains in place.
+                // Level-specific wording creates a fresh question instance while
+                // gradually moving from recall to application/challenge.
+                val variant = ((level - 1) % 5)
+                val challengeText = when (tier) {
+                    1 -> item.text
+                    2 -> "Choose the best answer: ${item.text}"
+                    3 -> "Think carefully and apply what you know: ${item.text}"
+                    4 -> "Challenge: Which answer is most accurate? ${item.text}"
+                    else -> "Expert challenge: After analyzing the choices, ${item.text.lowercase().replaceFirstChar { it.uppercase() }}"
+                }
+                val finalText = "Level $level • ${difficultyName(level)} • V${variant + 1}: $challengeText"
+
                 val shuffledChoices = item.choices.shuffled()
                 val shuffledAnswer = shuffledChoices.indexOf(item.choices[item.answer])
                 result.add(
                     Question(
-                        "$name-L$level-Q${i + 1}",
+                        "$name-L$level-Q${i + 1}-V${variant + 1}",
                         name,
-                        "Level $level: ${item.text}",
+                        finalText,
                         shuffledChoices,
                         shuffledAnswer,
-                        item.explanation
+                        "Difficulty: ${difficultyName(level)}. ${item.explanation}"
                     )
                 )
             }
@@ -1819,6 +1939,14 @@ private fun makeQuestions(subject: String, level: Int): List<Question> {
     }
 
     return result.distinctBy { it.id }
+}
+
+private fun difficultyName(level: Int): String = when {
+    level <= 20 -> "Easy"
+    level <= 40 -> "Medium"
+    level <= 60 -> "Hard"
+    level <= 80 -> "Very Hard"
+    else -> "Expert"
 }
 
 private fun questionBank(subject: String): List<BankItem> = when (subject) {
