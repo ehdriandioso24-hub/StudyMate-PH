@@ -1005,101 +1005,96 @@ private fun StudyMateApp() {
                     Screen.REVIEW -> {
                         Heading(
                             "📚 Answer Review",
-                            "Answers are grouped by subject, level, and result."
+                            "Piliin ang subject at uri ng sagot."
                         )
 
                         if (history.isEmpty()) {
-                            Text("No answered questions yet.", color = muted)
+                            Text("Wala pang nasagot na tanong.", color = muted, style = MaterialTheme.typography.bodyMedium)
                         } else {
-                            history
-                                .groupBy { it.question.subject }
-                                .toSortedMap(String.CASE_INSENSITIVE_ORDER)
-                                .forEach { (subjectName, subjectHistory) ->
+                            val availableSubjects = history.map { it.question.subject }.distinct().sorted()
+                            var reviewSubject by rememberSaveable { mutableStateOf("All") }
+                            var reviewResult by rememberSaveable { mutableStateOf("All") }
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                listOf("All" to "Lahat").forEach { (key, label) ->
+                                    FilterChip(
+                                        selected = reviewSubject == key,
+                                        onClick = { reviewSubject = key },
+                                        label = { Text(label, style = MaterialTheme.typography.labelSmall) }
+                                    )
+                                }
+                                availableSubjects.forEach { subjectName ->
+                                    FilterChip(
+                                        selected = reviewSubject == subjectName,
+                                        onClick = { reviewSubject = subjectName },
+                                        label = { Text(subjectName, style = MaterialTheme.typography.labelSmall) }
+                                    )
+                                }
+                            }
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                FilterChip(
+                                    selected = reviewResult == "All",
+                                    onClick = { reviewResult = "All" },
+                                    label = { Text("Lahat (${history.size})", style = MaterialTheme.typography.labelSmall) }
+                                )
+                                FilterChip(
+                                    selected = reviewResult == "Correct",
+                                    onClick = { reviewResult = "Correct" },
+                                    label = { Text("✓ Correct (${history.count { it.correct }})", style = MaterialTheme.typography.labelSmall) }
+                                )
+                                FilterChip(
+                                    selected = reviewResult == "Wrong",
+                                    onClick = { reviewResult = "Wrong" },
+                                    label = { Text("✕ Wrong (${history.count { !it.correct }})", style = MaterialTheme.typography.labelSmall) }
+                                )
+                            }
+
+                            val filteredHistory = history.filter { item ->
+                                (reviewSubject == "All" || item.question.subject == reviewSubject) &&
+                                    (reviewResult == "All" ||
+                                        (reviewResult == "Correct" && item.correct) ||
+                                        (reviewResult == "Wrong" && !item.correct))
+                            }
+
+                            if (filteredHistory.isEmpty()) {
+                                Text("Walang sagot sa filter na ito.", color = muted, style = MaterialTheme.typography.bodySmall)
+                            } else {
+                                filteredHistory.forEach { item ->
                                     Card(
                                         modifier = Modifier.fillMaxWidth(),
-                                        colors = CardDefaults.cardColors(
-                                            containerColor = colors.surface
-                                        )
+                                        colors = CardDefaults.cardColors(containerColor = colors.surface)
                                     ) {
                                         Column(
-                                            Modifier.padding(14.dp),
-                                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                                            Modifier.padding(10.dp),
+                                            verticalArrangement = Arrangement.spacedBy(4.dp)
                                         ) {
                                             Text(
-                                                "📘 $subjectName",
-                                                fontWeight = FontWeight.ExtraBold,
-                                                style = MaterialTheme.typography.titleMedium,
-                                                color = colors.primary
+                                                "${item.question.subject} • Level ${item.level} • ${if (item.correct) "✓ Correct" else "✕ Wrong"}",
+                                                color = if (item.correct) Color(0xFF2E7D32) else Color(0xFFC62828),
+                                                fontWeight = FontWeight.Bold,
+                                                style = MaterialTheme.typography.labelMedium
                                             )
-
-                                            subjectHistory
-                                                .groupBy { it.level }
-                                                .toSortedMap()
-                                                .forEach { (reviewLevel, levelHistory) ->
-                                                    Divider()
-                                                    Text(
-                                                        "Level $reviewLevel",
-                                                        fontWeight = FontWeight.Bold,
-                                                        style = MaterialTheme.typography.titleSmall
-                                                    )
-
-                                                    listOf(
-                                                        true to "✓ Tama ang Sagot",
-                                                        false to "✕ Mali ang Sagot"
-                                                    ).forEach { (isCorrectGroup, heading) ->
-                                                        val resultItems = levelHistory.filter {
-                                                            it.correct == isCorrectGroup
-                                                        }
-                                                        Text(
-                                                            "$heading (${resultItems.size})",
-                                                            fontWeight = FontWeight.Bold,
-                                                            color = if (isCorrectGroup) Color(0xFF2E7D32) else Color(0xFFC62828)
-                                                        )
-
-                                                        if (resultItems.isEmpty()) {
-                                                            Text(
-                                                                "Wala pang mga tanong sa grupong ito.",
-                                                                color = muted
-                                                            )
-                                                        } else {
-                                                            resultItems.forEach { item ->
-                                                                Card(
-                                                                    modifier = Modifier.fillMaxWidth(),
-                                                                    colors = CardDefaults.cardColors(
-                                                                        containerColor = colors.background
-                                                                    )
-                                                                ) {
-                                                                    Column(
-                                                                        Modifier.padding(12.dp),
-                                                                        verticalArrangement = Arrangement.spacedBy(5.dp)
-                                                                    ) {
-                                                                        Text(
-                                                                            item.question.text,
-                                                                            fontWeight = FontWeight.SemiBold
-                                                                        )
-                                                                        Text(
-                                                                            "Sagot mo: ${
-                                                                                item.question.choices.getOrElse(item.selected) { "—" }
-                                                                            }"
-                                                                        )
-                                                                        Text(
-                                                                            "Tamang sagot: ${
-                                                                                item.question.choices.getOrElse(item.question.answer) { "—" }
-                                                                            }"
-                                                                        )
-                                                                        Text(
-                                                                            item.question.explanation,
-                                                                            color = muted
-                                                                        )
-                                                                    }
-                                                                }
-                                                            }
-                                                        }
-                                                    }
-                                                }
+                                            Text(item.question.text, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyMedium)
+                                            Text(
+                                                "Sagot mo: ${item.question.choices.getOrElse(item.selected) { "—" }}",
+                                                style = MaterialTheme.typography.bodySmall
+                                            )
+                                            Text(
+                                                "Tamang sagot: ${item.question.choices.getOrElse(item.question.answer) { "—" }}",
+                                                style = MaterialTheme.typography.bodySmall
+                                            )
+                                            Text(item.question.explanation, color = muted, style = MaterialTheme.typography.bodySmall)
                                         }
                                     }
                                 }
+                            }
                         }
                     }
 
