@@ -5,6 +5,8 @@ import android.content.Context
 import android.media.AudioManager
 import android.media.ToneGenerator
 import android.os.Bundle
+import java.time.LocalDate
+import java.time.temporal.ChronoUnit
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
@@ -124,6 +126,18 @@ private fun StudyMateApp() {
     var correct by remember {
         mutableIntStateOf(prefs.getInt("correct", 0))
     }
+    var xp by remember {
+        mutableIntStateOf(prefs.getInt("xp", 0).coerceAtLeast(0))
+    }
+    var dailyStreak by remember {
+        mutableIntStateOf(prefs.getInt("dailyStreak", 0).coerceAtLeast(0))
+    }
+    var lastStudyDate by remember {
+        mutableStateOf(prefs.getString("lastStudyDate", "") ?: "")
+    }
+    var dailyCompletedDate by remember {
+        mutableStateOf(prefs.getString("dailyCompletedDate", "") ?: "")
+    }
     var selectedSubject by rememberSaveable { mutableStateOf("Mixed") }
     var lightTheme by remember {
         mutableStateOf(prefs.getBoolean("lightTheme", false))
@@ -191,6 +205,7 @@ private fun StudyMateApp() {
     var hiddenChoices by remember { mutableStateOf(setOf<Int>()) }
     var quizResultSaved by rememberSaveable { mutableStateOf(false) }
     var quizStartedAt by rememberSaveable { mutableLongStateOf(System.currentTimeMillis()) }
+    var dailyChallengeActive by rememberSaveable { mutableStateOf(false) }
     val localLeaderboard = remember {
         mutableStateListOf<String>().apply {
             addAll((prefs.getString("localLeaderboard", "") ?: "").split("\n").filter { it.isNotBlank() })
@@ -206,6 +221,10 @@ private fun StudyMateApp() {
             .putInt("level_$selectedSubject", level)
             .putInt("answered", answered)
             .putInt("correct", correct)
+            .putInt("xp", xp)
+            .putInt("dailyStreak", dailyStreak)
+            .putString("lastStudyDate", lastStudyDate)
+            .putString("dailyCompletedDate", dailyCompletedDate)
             .putString("answeredIds", encodeStrings(answeredIds))
             .putString("history", encodeHistory(history))
             .putString("customSubjects", encodeStrings(customSubjects))
@@ -216,7 +235,7 @@ private fun StudyMateApp() {
             .apply()
     }
 
-    fun startQuiz(subject: String) {
+    fun startQuiz(subject: String, daily: Boolean = false) {
         selectedSubject = subject
         level = subjectLevels.getOrPut(subject) {
             prefs.getInt("level_$subject", prefs.getInt("level", 1)).coerceIn(1, 100)
@@ -235,13 +254,14 @@ private fun StudyMateApp() {
         hiddenChoices = emptySet()
         quizResultSaved = false
         quizStartedAt = System.currentTimeMillis()
+        dailyChallengeActive = daily
 
         val builtIn = makeQuestions(subject, level)
         val imported = importedQuestions.filter {
             subject == "Mixed" || it.subject.equals(subject, ignoreCase = true)
         }
         val pool = (builtIn + imported).distinctBy { it.id }
-        questions = pool.filter { it.id !in answeredIds }.shuffled().take(20)
+        questions = pool.filter { it.id !in answeredIds }.shuffled().take(if (daily) 10 else 20)
 
         screen = Screen.QUIZ.name
     }
@@ -261,6 +281,7 @@ private fun StudyMateApp() {
         hiddenChoices = emptySet()
         quizResultSaved = false
         quizStartedAt = System.currentTimeMillis()
+        dailyChallengeActive = false
         questions = questions.shuffled()
         screen = Screen.QUIZ.name
     }
@@ -291,6 +312,7 @@ private fun StudyMateApp() {
             val speedBonus = (secondsLeft * 2).coerceAtLeast(0)
             val comboBonus = if (streak >= 5) 100 else if (streak >= 3) 50 else 0
             quizScore += 100 + speedBonus + comboBonus
+            xp += 10 + (speedBonus / 2) + if (streak >= 5) 10 else 0
         } else {
             lives = (lives - 1).coerceAtLeast(0)
             streak = 0
@@ -310,6 +332,20 @@ private fun StudyMateApp() {
         val total = questions.size.coerceAtLeast(1)
         val passNeeded = kotlin.math.ceil(total * 0.75).toInt()
         if (quizCorrect >= passNeeded) {
+            if (dailyChallengeActive) {
+                val today = LocalDate.now().toString()
+                if (dailyCompletedDate != today) {
+                    dailyStreak = if (lastStudyDate.isNotBlank()) {
+                        val gap = runCatching { ChronoUnit.DAYS.between(LocalDate.parse(lastStudyDate), LocalDate.parse(today)) }.getOrDefault(99L)
+                        if (gap == 1L) dailyStreak + 1 else 1
+                    } else 1
+                    lastStudyDate = today
+                    dailyCompletedDate = today
+                    xp += 100
+                    saveProgress()
+                }
+                dailyChallengeActive = false
+            }
             if (level < 100) {
                 levelUpFrom = level
                 level = (level + 1).coerceAtMost(100)
@@ -531,12 +567,19 @@ private fun StudyMateApp() {
 
                         CardBox(
                             "🧠 Quick Quiz",
-                            "Mixed questions from four subjects"
+                            "Mixed questions from all 7 subjects"
                         ) { startQuiz("Mixed") }
+
+                        val today = LocalDate.now().toString()
+                        val dailyDone = dailyCompletedDate == today
+                        CardBox(
+                            if (dailyDone) "✅ Daily Challenge Complete" else "🔥 Daily Challenge",
+                            if (dailyDone) "Come back tomorrow • ${dailyStreak}-day streak" else "10 mixed questions • +100 XP bonus • Current streak: $dailyStreak"
+                        ) { if (!dailyDone) startQuiz("Mixed", daily = true) }
 
                         CardBox(
                             "📚 My Subjects",
-                            "Math, Science, English, and Filipino"
+                            "7 subjects • Level 1–100"
                         ) { screen = Screen.SUBJECTS.name }
 
                         CardBox(
@@ -1322,6 +1365,8 @@ private fun ProfilePage(
     }
 
     CardBox("📚 Level", "$level / 100") {}
+    CardBox("⭐ XP", "$xp XP") {}
+    CardBox("🔥 Daily streak", "$dailyStreak day(s)") {}
     CardBox("📝 Questions answered", "$answered") {}
     CardBox("🎯 Correct answers", "$correct") {}
     CardBox("🏆 Achievements", achievementsFor(answered, correct).joinToString(" • "))
@@ -1342,6 +1387,7 @@ private fun achievementsFor(answered: Int, correct: Int): List<String> {
     if (correct >= 10) result += "🎯 Sharp Mind"
     if (correct >= 50) result += "🏆 Quiz Master"
     if (answered >= 100) result += "🚀 Study Champion"
+    if (correct >= 100) result += "🧠 Master Learner"
     return result.ifEmpty { listOf("🌱 Start your first quiz") }
 }
 
