@@ -726,6 +726,8 @@ private fun StudyMateApp() {
                             level = level,
                             answered = answered,
                             correct = correct,
+                            xp = xp,
+                            dailyStreak = dailyStreak,
                             onSave = { name, email ->
                                 studentName = name
                                 studentEmail = email
@@ -1333,6 +1335,8 @@ private fun ProfilePage(
     level: Int,
     answered: Int,
     correct: Int,
+    xp: Int,
+    dailyStreak: Int,
     onSave: (String, String) -> Unit,
     onLogout: () -> Unit
 ) {
