@@ -26,6 +26,7 @@ import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
 import org.json.JSONArray
 import org.json.JSONObject
+import kotlin.random.Random
 
 private enum class Screen {
     HOME, SUBJECTS, SEARCH, QUIZ, LEVEL_UP, LEVEL_COMPLETE, GAME_OVER, NOTES, FLASHCARDS, TIMER, PROGRESS, REVIEW, PROFILE, SETTINGS
@@ -109,8 +110,7 @@ private fun StudyMateApp() {
     }
     val subjectLevels = remember {
         mutableStateMapOf<String, Int>().apply {
-            listOf("Mixed", "Math", "Science", "English", "Filipino",
-                "Araling Panlipunan", "ICT", "PE & Health").forEach { subject ->
+            (listOf("Mixed") + studySubjects).forEach { subject ->
                 put(
                     subject,
                     prefs.getInt("level_$subject", prefs.getInt("level", 1)).coerceIn(1, 100)
@@ -531,12 +531,12 @@ private fun StudyMateApp() {
 
                         CardBox(
                             "🧠 Quick Quiz",
-                            "Mixed questions from four subjects"
+                            "Mixed questions from all 7 subjects"
                         ) { startQuiz("Mixed") }
 
                         CardBox(
                             "📚 My Subjects",
-                            "Math, Science, English, and Filipino"
+                            "Math, Science, English, Filipino, AP, ICT, PE & Health"
                         ) { screen = Screen.SUBJECTS.name }
 
                         CardBox(
@@ -586,10 +586,7 @@ private fun StudyMateApp() {
                             "Choose a subject to start practicing."
                         )
 
-                        listOf(
-                            "Math", "Science", "English", "Filipino",
-                            "Araling Panlipunan", "ICT", "PE & Health"
-                        ).forEach { name ->
+                        studySubjects.forEach { name ->
                             CardBox(
                                 "${emoji(name)} $name",
                                 "Practice questions • Level ${subjectLevels[name] ?: prefs.getInt("level_$name", level)}"
@@ -638,10 +635,7 @@ private fun StudyMateApp() {
                         )
 
                         val query = searchQuery.trim()
-                        val subjectResults = listOf(
-                            "Math", "Science", "English", "Filipino",
-                            "Araling Panlipunan", "ICT", "PE & Health"
-                        ).filter {
+                        val subjectResults = studySubjects.filter {
                             query.isBlank() || it.contains(query, ignoreCase = true)
                         }
 
@@ -1722,155 +1716,620 @@ private fun emoji(subject: String): String = when (subject) {
     else -> "🧠"
 }
 
-private fun makeQuestions(subject: String, level: Int): List<Question> {
-    val subjects = if (subject == "Mixed") {
-        listOf("Math", "Science", "English", "Filipino")
-    } else {
-        listOf(subject)
-    }
+private val studySubjects = listOf(
+    "Math", "Science", "English", "Filipino",
+    "Araling Panlipunan", "ICT", "PE & Health"
+)
 
+private fun makeQuestions(subject: String, level: Int): List<Question> {
+    val safeLevel = level.coerceIn(1, 100)
+    val subjects = if (subject == "Mixed") studySubjects else listOf(subject)
     val result = mutableListOf<Question>()
 
     subjects.forEach { name ->
-        if (name == "Math") {
-            for (n in 1..40) {
-                val a = level + n + 2
-                val b = (n % 9) + 2
-                val operation = when ((n + level) % 4) {
-                    0 -> "+"
-                    1 -> "-"
-                    2 -> "×"
-                    else -> "÷"
-                }
-
-                val x: Int
-                val y: Int
-                val answer: Int
-                val text: String
-
-                when (operation) {
-                    "+" -> {
-                        x = a
-                        y = b + level / 5
-                        answer = x + y
-                        text = "$x + $y = ?"
-                    }
-                    "-" -> {
-                        x = a + b
-                        y = b
-                        answer = x - y
-                        text = "$x - $y = ?"
-                    }
-                    "×" -> {
-                        x = (level % 12) + 2
-                        y = b
-                        answer = x * y
-                        text = "$x × $y = ?"
-                    }
-                    else -> {
-                        x = b * ((n % 10) + 2)
-                        y = b
-                        answer = x / y
-                        text = "$x ÷ $y = ?"
-                    }
-                }
-
-                val options = linkedSetOf(
-                    answer + 1,
-                    answer - 1,
-                    answer + 2,
-                    answer
-                ).toList().shuffled()
-
-                result.add(
-                    Question(
-                        "Math-L$level-Q$n",
-                        "Math",
-                        text,
-                        options.map { it.toString() },
-                        options.indexOf(answer),
-                        "The correct answer is $answer."
-                    )
-                )
-            }
-        } else {
-            questionBank(name).forEachIndexed { i, item ->
-                result.add(
-                    Question(
-                        "$name-L$level-Q${i + 1}",
-                        name,
-                        "Level $level: ${item.text}",
-                        item.choices,
-                        item.answer,
-                        item.explanation
-                    )
-                )
-            }
+        questionBank(name, safeLevel).forEachIndexed { i, item ->
+            result += Question(
+                "$name-L$safeLevel-Q${i + 1}",
+                name,
+                "Level $safeLevel: ${item.text}",
+                item.choices,
+                item.answer,
+                item.explanation
+            )
         }
     }
 
     return result.distinctBy { it.id }
 }
 
-private fun questionBank(subject: String): List<BankItem> = when (subject) {
-    "Science" -> listOf(
-        BankItem("Which planet is known as the Red Planet?", listOf("Venus", "Jupiter", "Mars", "Mercury"), 2, "Mars looks reddish because of iron-rich dust."),
-        BankItem("Which organ pumps blood around the body?", listOf("Lungs", "Heart", "Brain", "Stomach"), 1, "The heart pumps blood."),
-        BankItem("What do plants use to make food?", listOf("Moonlight", "Sunlight", "Plastic", "Sound"), 1, "Plants use light energy during photosynthesis."),
-        BankItem("What is H₂O commonly called?", listOf("Salt", "Hydrogen", "Water", "Oxygen"), 2, "H₂O is water."),
-        BankItem("Which gas do humans need to breathe?", listOf("Oxygen", "Helium", "Neon", "Methane"), 0, "Humans need oxygen for cellular respiration."),
-        BankItem("What force pulls objects toward Earth?", listOf("Friction", "Gravity", "Sound", "Light"), 1, "Gravity attracts objects with mass."),
-        BankItem("Which plant part usually absorbs water?", listOf("Flower", "Leaf", "Root", "Fruit"), 2, "Roots absorb water and minerals."),
-        BankItem("At what temperature does water freeze in Celsius?", listOf("0°C", "10°C", "50°C", "100°C"), 0, "Water freezes at 0°C under standard pressure.")
+/*
+ * Generates a fresh question set for every level. The formulas and topics
+ * deliberately scale with the level so Level 1 is approachable while
+ * Levels 50–100 require more reasoning. IDs include the level, so old
+ * saved progress/history remains compatible with the existing app.
+ */
+private fun questionBank(subject: String, level: Int): List<BankItem> {
+    val base = when (subject) {
+        "Math" -> mathQuestions(level)
+        "Science" -> scienceQuestions(level)
+        "English" -> englishQuestions(level)
+        "Filipino" -> filipinoQuestions(level)
+        "Araling Panlipunan" -> aralingPanlipunanQuestions(level)
+        "ICT" -> ictQuestions(level)
+        "PE & Health" -> peHealthQuestions(level)
+        else -> emptyList()
+    }
+    return (base + extraQuestions(subject, level)).distinctBy { it.text }
+}
+
+private fun intChoices(answer: Int, seed: Int): List<String> {
+    val candidates = linkedSetOf(
+        answer,
+        answer + 1 + (seed % 3),
+        answer - 1 - (seed % 2),
+        answer + 3 + (seed % 4),
+        answer - 3 - (seed % 3)
+    ).filter { it >= 0 }
+
+    return candidates.take(4).shuffled(Random(seed))
+        .let { values ->
+            if (answer in values) values else listOf(answer) + values
+        }
+        .take(4)
+        .map(Int::toString)
+}
+
+private fun textChoices(correct: String, alternatives: List<String>, seed: Int): List<String> =
+    (listOf(correct) + alternatives).distinct().take(4).shuffled(Random(seed))
+
+private fun mathQuestions(level: Int): List<BankItem> {
+    val difficulty = when {
+        level <= 20 -> 1
+        level <= 40 -> 2
+        level <= 60 -> 3
+        level <= 80 -> 4
+        else -> 5
+    }
+
+    val a = level + 3
+    val b = (level % 9) + 2
+    val c = (level % 7) + 3
+
+    val q1Answer = a + b * difficulty
+    val q2Answer = a * b + c
+    val q3Answer = (a + b) * difficulty
+    val q4Answer = a * difficulty - b
+    val q5Answer = (level + 10) * (difficulty + 1)
+    val q6Answer = level * 2 + 5
+    val q7Answer = (level % 10) + difficulty * 5
+    val q8Answer = level + difficulty * 7
+
+    return listOf(
+        BankItem("$a + ($b × $difficulty) = ?", intChoices(q1Answer, level), intChoices(q1Answer, level).indexOf(q1Answer.toString()), "Multiply before adding."),
+        BankItem("$a × $b + $c = ?", intChoices(q2Answer, level + 1), intChoices(q2Answer, level + 1).indexOf(q2Answer.toString()), "Do the multiplication first, then add."),
+        BankItem("($a + $b) × $difficulty = ?", intChoices(q3Answer, level + 2), intChoices(q3Answer, level + 2).indexOf(q3Answer.toString()), "Add inside the parentheses before multiplying."),
+        BankItem("$a × $difficulty − $b = ?", intChoices(q4Answer, level + 3), intChoices(q4Answer, level + 3).indexOf(q4Answer.toString()), "Multiply first, then subtract."),
+        BankItem("A pattern starts at ${level + 10} and is multiplied by ${difficulty + 1}. What is the next value?", intChoices(q5Answer, level + 4), intChoices(q5Answer, level + 4).indexOf(q5Answer.toString()), "Multiply the starting value by the stated factor."),
+        BankItem("If x + $level = ${q6Answer + level}, what is x?", intChoices(q6Answer, level + 5), intChoices(q6Answer, level + 5).indexOf(q6Answer.toString()), "Subtract $level from both sides."),
+        BankItem("What is ${q7Answer} × 2 + ${difficulty}?", intChoices(q7Answer * 2 + difficulty, level + 6), intChoices(q7Answer * 2 + difficulty, level + 6).indexOf((q7Answer * 2 + difficulty).toString()), "Follow multiplication before addition."),
+        BankItem("If a number is $difficulty more than $q8Answer, what is the number?", intChoices(q8Answer + difficulty, level + 7), intChoices(q8Answer + difficulty, level + 7).indexOf((q8Answer + difficulty).toString()), "Add the difference to the original value.")
+    ).map { item ->
+        val answerText = item.choices[item.answer]
+        item.copy(
+            choices = item.choices,
+            answer = item.choices.indexOf(answerText)
+        )
+    }
+}
+
+private fun scienceQuestions(level: Int): List<BankItem> {
+    val temp = 20 + level
+    val band = when {
+        level <= 20 -> "life"
+        level <= 40 -> "matter"
+        level <= 60 -> "physics"
+        level <= 80 -> "earth"
+        else -> "space"
+    }
+
+    val q = when (band) {
+        "life" -> listOf(
+            "Which body system transports oxygen and nutrients around the body?" to "Circulatory system",
+            "What do green plants use to capture light energy?" to "Chlorophyll",
+            "Which cell structure contains most genetic material?" to "Nucleus",
+            "What is the main job of roots?" to "Absorb water and minerals"
+        )
+        "matter" -> listOf(
+            "What state of matter has a fixed volume but takes the shape of its container?" to "Liquid",
+            "What happens to most substances when they are heated?" to "They expand",
+            "What is the pH of a neutral solution?" to "7",
+            "What is the smallest unit of an element that keeps its chemical identity?" to "Atom"
+        )
+        "physics" -> listOf(
+            "What is the SI unit of force?" to "Newton",
+            "If distance stays constant and time decreases, what happens to average speed?" to "It increases",
+            "What type of energy is stored in a stretched rubber band?" to "Elastic potential energy",
+            "What force opposes motion between surfaces?" to "Friction"
+        )
+        "earth" -> listOf(
+            "Which layer of Earth is the thin outer solid layer?" to "Crust",
+            "What process turns liquid water into water vapor?" to "Evaporation",
+            "What instrument measures air pressure?" to "Barometer",
+            "What causes day and night?" to "Earth's rotation"
+        )
+        else -> listOf(
+            "Which planet is famous for its prominent ring system?" to "Saturn",
+            "What force keeps planets in orbit around the Sun?" to "Gravity",
+            "What is a light-year a measure of?" to "Distance",
+            "What galaxy contains our Solar System?" to "Milky Way"
+        )
+    }
+
+    val extra = listOf(
+        "At level $level, a sample temperature is ${temp}°C. Which unit is used for this temperature?",
+        "Which statement best describes scientific evidence?",
+        "Which tool is most useful for measuring a length accurately?",
+        "Why do scientists repeat measurements?"
     )
 
-    "English" -> listOf(
-        BankItem("Which word is a noun?", listOf("Quickly", "Beautiful", "Teacher", "Run"), 2, "A noun names a person, place, thing, or idea."),
-        BankItem("Which word is a verb?", listOf("Happiness", "Jump", "Blue", "Soft"), 1, "A verb expresses an action or state."),
-        BankItem("What is the plural of 'child'?", listOf("Childs", "Childes", "Children", "Childrens"), 2, "The plural is children."),
-        BankItem("Which punctuation ends a direct question?", listOf("Period", "Comma", "Question mark", "Colon"), 2, "A direct question ends with a question mark."),
-        BankItem("What is the opposite of 'ancient'?", listOf("Old", "Modern", "Historic", "Past"), 1, "Modern means current or recent."),
-        BankItem("Which word is an adjective?", listOf("Happily", "Bright", "Speak", "Yesterday"), 1, "An adjective describes a noun or pronoun."),
-        BankItem("Choose the correct sentence.", listOf("She are ready.", "She is ready.", "She am ready.", "She be ready."), 1, "Use 'is' with she."),
-        BankItem("What is a synonym for 'begin'?", listOf("Finish", "Start", "Close", "Stop"), 1, "Start and begin have similar meanings.")
+    return q.mapIndexed { i, (question, correct) ->
+        val alternatives = when (correct) {
+            "Circulatory system" -> listOf("Digestive system", "Skeletal system", "Respiratory system")
+            "Chlorophyll" -> listOf("Hemoglobin", "Keratin", "Calcium")
+            "Nucleus" -> listOf("Cell wall", "Ribosome", "Vacuole")
+            "Absorb water and minerals" -> listOf("Make seeds", "Produce sound", "Store sunlight")
+            "Liquid" -> listOf("Solid", "Gas", "Plasma")
+            "They expand" -> listOf("They disappear", "They freeze", "They lose all mass")
+            "7" -> listOf("0", "5", "14")
+            "Atom" -> listOf("Organ", "Cell", "Tissue")
+            "Newton" -> listOf("Joule", "Watt", "Pascal")
+            "It increases" -> listOf("It decreases", "It becomes zero", "It stays exactly the same")
+            "Elastic potential energy" -> listOf("Sound energy", "Nuclear energy", "Light energy")
+            "Friction" -> listOf("Gravity", "Magnetism", "Buoyancy")
+            "Crust" -> listOf("Inner core", "Outer core", "Mantle")
+            "Evaporation" -> listOf("Condensation", "Freezing", "Melting")
+            "Barometer" -> listOf("Thermometer", "Ammeter", "Compass")
+            "Earth's rotation" -> listOf("Earth's orbit", "The Moon's phases", "Ocean tides only")
+            "Saturn" -> listOf("Mars", "Mercury", "Venus")
+            "Gravity" -> listOf("Friction", "Sound", "Electricity")
+            "Distance" -> listOf("Time", "Mass", "Temperature")
+            "Milky Way" -> listOf("Andromeda", "Sombrero", "Whirlpool")
+            else -> listOf("Only opinion", "A random guess", "An unrelated claim")
+        }
+        BankItem(
+            question,
+            textChoices(correct, alternatives, level + i),
+            textChoices(correct, alternatives, level + i).indexOf(correct),
+            "The correct answer is $correct."
+        )
+    } + extra.mapIndexed { i, question ->
+        val correct = when (i) {
+            0 -> "°C"
+            1 -> "A conclusion supported by observations or measurements"
+            2 -> "Ruler"
+            else -> "To improve reliability and reduce random error"
+        }
+        val alternatives = when (i) {
+            0 -> listOf("kg", "m", "L")
+            1 -> listOf("A personal preference", "A rumor", "A guess with no evidence")
+            2 -> listOf("Spoon", "Clock", "Pillow")
+            else -> listOf("To make results less useful", "To avoid recording data", "To guarantee every result is identical")
+        }
+        val choices = textChoices(correct, alternatives, level + 20 + i)
+        BankItem(question, choices, choices.indexOf(correct), "The best answer is $correct.")
+    }
+}
+
+private fun englishQuestions(level: Int): List<BankItem> {
+    val n = level + 2
+    val items = if (level <= 25) listOf(
+        "Which word is a noun?" to "student",
+        "Which word is a verb?" to "write",
+        "Which word is an adjective?" to "careful",
+        "What is the plural of 'mouse'?" to "mice",
+        "What is the opposite of 'expand'?" to "contract",
+        "Which punctuation mark ends a direct question?" to "?",
+        "What is a synonym for 'happy'?" to "glad",
+        "Choose the correct sentence." to "She is ready."
+    ) else if (level <= 50) listOf(
+        "Which sentence uses the past tense correctly?" to "They visited the museum.",
+        "Which word is an adverb?" to "quickly",
+        "Which sentence has correct subject-verb agreement?" to "The students are studying.",
+        "What is the comparative form of 'good'?" to "better",
+        "Which word is a conjunction?" to "because",
+        "What does a pronoun replace?" to "A noun or noun phrase",
+        "Which sentence uses an apostrophe correctly?" to "Maria's book is new.",
+        "What is the main purpose of a topic sentence?" to "State the paragraph's main idea"
+    ) else if (level <= 75) listOf(
+        "Which sentence is in the passive voice?" to "The project was completed by the team.",
+        "What is a metaphor?" to "A direct comparison without like or as",
+        "Which transition shows contrast?" to "however",
+        "What is an inference?" to "A conclusion based on evidence",
+        "Which sentence avoids a misplaced modifier?" to "Walking home, Ana saw the sunset.",
+        "What is the purpose of a thesis statement?" to "Present the main claim",
+        "Which word is closest in meaning to 'concise'?" to "brief",
+        "What is an independent clause?" to "A clause that can stand as a sentence"
+    ) else listOf(
+        "Which revision is most concise?" to "The plan failed because it lacked funding.",
+        "What is an author's tone?" to "The attitude conveyed by the writing",
+        "Which appeal relies on evidence and reasoning?" to "logos",
+        "What is a counterclaim?" to "An opposing argument",
+        "Which sentence best demonstrates parallel structure?" to "She likes reading, writing, and drawing.",
+        "What is the purpose of citing a source?" to "Give credit and support a claim",
+        "Which word best describes language with multiple meanings depending on context?" to "ambiguous",
+        "What is the strongest thesis?" to "A specific, arguable claim supported by reasons"
     )
 
-    "Filipino" -> listOf(
-        BankItem("Ano ang Filipino ng 'book'?", listOf("Lapis", "Aklat", "Mesa", "Paaralan"), 1, "Ang aklat ay book sa Filipino."),
-        BankItem("Alin ang pangngalan?", listOf("Mabilis", "Tumakbo", "Guro", "Maganda"), 2, "Ang guro ay ngalan ng tao."),
-        BankItem("Anong salita ang naglalarawan sa pangngalan?", listOf("Pandiwa", "Pang-uri", "Panghalip", "Pang-ukol"), 1, "Ang pang-uri ay naglalarawan."),
-        BankItem("Alin ang pandiwa?", listOf("Bahay", "Masaya", "Sumulat", "Pula"), 2, "Ang sumulat ay nagsasaad ng kilos."),
-        BankItem("Ano ang kasalungat ng 'malawak'?", listOf("Malaki", "Makitid", "Mahaba", "Mataas"), 1, "Ang makitid ay kasalungat ng malawak."),
-        BankItem("Alin ang panghalip?", listOf("Siya", "Mesa", "Takbo", "Asul"), 0, "Ang siya ay panghalip panao."),
-        BankItem("Ano ang kasingkahulugan ng 'masaya'?", listOf("Malungkot", "Maligaya", "Galit", "Pagod"), 1, "Ang maligaya ay kasingkahulugan ng masaya."),
-        BankItem("Anong bantas ang ginagamit sa tanong?", listOf("Tuldok", "Kuwit", "Tandang pananong", "Tutuldok"), 2, "Gumagamit ng tandang pananong sa tanong.")
+    return items.mapIndexed { i, (question, correct) ->
+        val alternatives = listOf(
+            "table", "run", "bright", "dogs",
+            "increase", "!", "sad", "They is ready.",
+            "They will visit the museum.", "slowly", "The student are studying.",
+            "gooder", "and", "An adjective", "Maria book is new.",
+            "Give a random detail", "The team completed the project.", "A comparison using like or as",
+            "therefore", "A prediction with no basis", "Add a decorative sentence",
+            "A phrase only", "long", "A clause that cannot stand alone",
+            "The plan failed because it was not successful due to a lack of funding.",
+            "The topic of the writing", "pathos", "A supporting detail", "She likes to read, writing, and drawing.",
+            "Make the text longer", "confusing"
+        ).filter { it != correct }
+        val choices = textChoices(correct, alternatives, level + i)
+        val suffix = if (level > 1) " (Level $level practice)" else ""
+        BankItem("$question$suffix", choices, choices.indexOf(correct), "The best answer is $correct.")
+    }
+}
+
+private fun filipinoQuestions(level: Int): List<BankItem> {
+    val items = if (level <= 25) listOf(
+        "Alin ang pangngalan?" to "guro",
+        "Alin ang pandiwa?" to "sumulat",
+        "Alin ang pang-uri?" to "maganda",
+        "Ano ang kasingkahulugan ng 'masaya'?" to "maligaya",
+        "Ano ang kasalungat ng 'mataas'?" to "mababa",
+        "Alin ang panghalip panao?" to "siya",
+        "Anong bantas ang ginagamit sa tanong?" to "tandang pananong",
+        "Ano ang Filipino ng 'book'?" to "aklat"
+    ) else if (level <= 50) listOf(
+        "Alin ang pang-abay?" to "mabilis",
+        "Alin ang pang-ukol?" to "sa",
+        "Ano ang simuno sa 'Si Ana ay nagbabasa.'?" to "Si Ana",
+        "Ano ang panaguri sa 'Si Ana ay nagbabasa.'?" to "nagbabasa",
+        "Ano ang kasingkahulugan ng 'matapang'?" to "magiting",
+        "Ano ang kasalungat ng 'malawak'?" to "makitid",
+        "Alin ang wastong pangungusap?" to "Nag-aaral si Ben araw-araw.",
+        "Ano ang tawag sa salitang nagsasaad ng kilos?" to "pandiwa"
+    ) else if (level <= 75) listOf(
+        "Ano ang tayutay na naghahambing gamit ang 'parang' o 'tulad'?" to "Pagtutulad",
+        "Ano ang pangunahing diwa ng isang teksto?" to "Pinakamahalagang kaisipan",
+        "Ano ang layunin ng isang talata?" to "Maglahad ng magkakaugnay na ideya",
+        "Alin ang halimbawa ng pangatnig?" to "dahil",
+        "Ano ang denotatibong kahulugan?" to "Literal na kahulugan",
+        "Ano ang konotatibong kahulugan?" to "Dagdag o pahiwatig na kahulugan",
+        "Ano ang paksa ng pangungusap?" to "Pinag-uusapan",
+        "Ano ang pandiwang naganap na?" to "Perpektibo"
+    ) else listOf(
+        "Ano ang tesis sa isang argumentatibong sanaysay?" to "Pangunahing paninindigan o pahayag",
+        "Ano ang kontra-argumento?" to "Punto ng kabilang panig",
+        "Ano ang kredibilidad ng sanggunian?" to "Pagiging mapagkakatiwalaan ng source",
+        "Ano ang lohikal na pangangatwiran?" to "Paggamit ng wastong batayan at ugnayan ng ideya",
+        "Ano ang bias?" to "Pagkiling na maaaring makaapekto sa paghatol",
+        "Ano ang sintesis?" to "Pag-uugnay ng mahahalagang ideya mula sa mga sanggunian",
+        "Ano ang retorikal na tanong?" to "Tanong na hindi nangangailangan ng direktang sagot",
+        "Ano ang kohesyon sa teksto?" to "Pagkakaugnay ng mga salita at ideya"
     )
 
-    "Araling Panlipunan" -> listOf(
-        BankItem("Ano ang kabisera ng Pilipinas?", listOf("Cebu", "Manila", "Davao", "Baguio"), 1, "Ang Manila ang kabisera ng Pilipinas."),
-        BankItem("Ano ang tawag sa pamahalaang pinamumunuan ng pangulo?", listOf("Presidential", "Monarchical", "Tribal", "Feudal"), 0, "Ang Pilipinas ay may presidential form of government."),
-        BankItem("Alin ang halimbawa ng likas na yaman?", listOf("Ginto", "Plastik", "Salamin", "Semento"), 0, "Ang ginto ay likas na yamang mineral."),
-        BankItem("Ano ang tawag sa pag-aaral ng nakaraan?", listOf("Heograpiya", "Kasaysayan", "Ekonomiks", "Agham"), 1, "Ang kasaysayan ay pag-aaral ng nakaraan."),
-        BankItem("Alin ang pangunahing anyong tubig?", listOf("Bundok", "Lambak", "Karagatan", "Burol"), 2, "Ang karagatan ay malaking anyong tubig.")
-    )
+    return items.mapIndexed { i, (question, correct) ->
+        val alternatives = listOf(
+            "mesa", "tumakbo", "mabilis", "malungkot", "mababa",
+            "ako", "tuldok", "lapis", "at", "kay Ben", "araw-araw",
+            "pang-uri", "Pagtutulad", "Maliit na detalye", "Magbigay ng hiwa-hiwalay na ideya",
+            "ngunit", "Kahulugang teknikal lamang", "Kahulugang walang pahiwatig",
+            "Kumilos", "Impektibo", "Paksa", "Pahayag na walang batayan"
+        ).filter { it != correct }
+        val choices = textChoices(correct, alternatives, level + i)
+        BankItem("$question (Antas $level)", choices, choices.indexOf(correct), "Ang tamang sagot ay $correct.")
+    }
+}
 
-    "ICT" -> listOf(
-        BankItem("Ano ang ibig sabihin ng CPU?", listOf("Central Processing Unit", "Computer Power Utility", "Central Program User", "Control Processing User"), 0, "CPU means Central Processing Unit."),
-        BankItem("Alin ang input device?", listOf("Monitor", "Printer", "Keyboard", "Speaker"), 2, "Ang keyboard ay ginagamit sa pag-input ng data."),
-        BankItem("Ano ang gamit ng web browser?", listOf("Mag-browse ng websites", "Magluto", "Mag-print ng pera", "Mag-charge ng phone"), 0, "Ang browser ay ginagamit para mag-access ng web pages."),
-        BankItem("Alin ang halimbawa ng operating system?", listOf("Android", "Keyboard", "HDMI", "Mouse"), 0, "Android ay isang operating system."),
-        BankItem("Ano ang tawag sa programang tumutulong protektahan ang computer laban sa malware?", listOf("Antivirus", "Calculator", "Player", "Editor"), 0, "Ang antivirus software ay tumutulong laban sa malware.")
-    )
+private fun aralingPanlipunanQuestions(level: Int): List<BankItem> {
+    val items = when {
+        level <= 25 -> listOf(
+            "Ano ang kabisera ng Pilipinas?" to "Maynila",
+            "Ano ang pinakamalaking pulo sa Pilipinas?" to "Luzon",
+            "Ano ang tawag sa pag-aaral ng nakaraan?" to "Kasaysayan",
+            "Alin ang likas na yaman?" to "Ginto",
+            "Ano ang pangunahing yunit ng pamahalaan sa Pilipinas?" to "Barangay",
+            "Ano ang tawag sa anyong tubig na napaliligiran ng lupa?" to "Lawa",
+            "Ano ang tawag sa mga taong naninirahan sa isang bansa?" to "Mamamayan",
+            "Ano ang salapi ng Pilipinas?" to "Piso"
+        )
+        level <= 50 -> listOf(
+            "Ano ang tawag sa sangay ng pamahalaan na gumagawa ng batas?" to "Lehislatibo",
+            "Ano ang pangunahing layunin ng buwis?" to "Pondohan ang serbisyong pampubliko",
+            "Ano ang ekonomiks?" to "Pag-aaral ng paggamit ng limitadong yaman",
+            "Ano ang demokrasya?" to "Pamamahalang nakabatay sa pakikilahok ng mamamayan",
+            "Ano ang heograpiya?" to "Pag-aaral ng lugar, tao, at kapaligiran",
+            "Ano ang migrasyon?" to "Paglipat ng tirahan ng tao",
+            "Ano ang suplay?" to "Dami ng produktong handang ipagbili",
+            "Ano ang demand?" to "Dami ng produktong nais at kayang bilhin"
+        )
+        level <= 75 -> listOf(
+            "Ano ang tawag sa kasunduang nagtatapos sa isang digmaan?" to "Kasunduang pangkapayapaan",
+            "Bakit mahalaga ang Saligang Batas?" to "Itinatakda nito ang pangunahing tuntunin ng pamahalaan",
+            "Ano ang soberanya?" to "Pinakamataas na kapangyarihan ng isang estado",
+            "Ano ang kolonyalismo?" to "Paghahari ng isang makapangyarihang bansa sa ibang lupain",
+            "Ano ang nasyonalismo?" to "Pagpapahalaga at pagkakaisa para sa sariling bansa",
+            "Ano ang urbanisasyon?" to "Pagdami at paglawak ng populasyon sa mga lungsod",
+            "Ano ang implasyon?" to "Pangkalahatang pagtaas ng presyo ng bilihin",
+            "Ano ang opportunity cost?" to "Halaga ng pinakamagandang alternatibong isinuko"
+        )
+        else -> listOf(
+            "Ano ang checks and balances?" to "Paglilimita at pagbabantay ng mga sangay sa isa't isa",
+            "Ano ang human rights?" to "Mga batayang karapatang taglay ng bawat tao",
+            "Ano ang sustainable development?" to "Pag-unlad na isinasaalang-alang ang pangmatagalang pangangailangan",
+            "Ano ang fiscal policy?" to "Pamamahala sa buwis at paggasta ng pamahalaan",
+            "Ano ang monetary policy?" to "Pamamahala sa salapi at interest rates",
+            "Ano ang globalization?" to "Lumalim na ugnayan ng mga bansa sa kalakalan at impormasyon",
+            "Ano ang civic participation?" to "Pakikilahok ng mamamayan sa buhay panlipunan at pampamahalaan",
+            "Ano ang primary source sa kasaysayan?" to "Orihinal na batis mula sa panahong pinag-aaralan"
+        )
+    }
 
-    "PE & Health" -> listOf(
-        BankItem("Ano ang magandang gawin bago mag-ehersisyo?", listOf("Warm-up", "Matulog", "Mag-fast food", "Umupo buong oras"), 0, "Ang warm-up ay naghahanda sa katawan para sa activity."),
-        BankItem("Alin ang halimbawa ng cardiovascular exercise?", listOf("Jumping jack", "Reading", "Drawing", "Typing"), 0, "Ang jumping jack ay nagpapataas ng heart rate."),
-        BankItem("Bakit mahalaga ang hydration?", listOf("Para mapalitan ang fluid na nawawala", "Para hindi na kumain", "Para hindi matulog", "Para maging invisible"), 0, "Mahalaga ang tubig para mapanatili ang normal na hydration."),
-        BankItem("Ano ang mahalagang bahagi ng balanced lifestyle?", listOf("Regular activity at sapat na pahinga", "Laging puyat", "Walang galaw", "Laging skip meals"), 0, "Kasama sa healthy routine ang activity at sapat na pahinga."),
-        BankItem("Ano ang dapat gawin kapag nakakaramdam ng matinding sakit habang nag-eehersisyo?", listOf("Huminto at magsabi sa trusted adult/coach", "Ipagpatuloy agad", "Dagdagan ang intensity", "Huwag pansinin"), 0, "Ang matinding sakit ay senyales para huminto at humingi ng angkop na tulong.")
-    )
+    return items.mapIndexed { i, (question, correct) ->
+        val alternatives = listOf(
+            "Batas ng kalikasan", "Lungsod", "Ekonomiks", "Plastik",
+            "Paaralan", "Dagat", "Turista", "Dolyar",
+            "Ehekutibo", "Para sa personal na luho", "Pag-aaral ng panahon lamang",
+            "Pamamahalang walang mamamayan", "Pag-aaral ng halaman", "Paglalakbay para sa bakasyon",
+            "Dami ng produktong itinapon", "Dami ng produktong walang presyo",
+            "Kasunduang pangkalakalan", "Piliing tuntunin lamang", "Kapangyarihan ng isang indibidwal",
+            "Pagbibigay ng lupa", "Pagkakawatak-watak", "Pagbaba ng populasyon sa lungsod",
+            "Pagbaba ng presyo", "Presyo ng lahat ng bagay",
+            "Isang panuntunan sa laro", "Pribilehiyo lamang ng iilan", "Pag-unlad nang walang limitasyon",
+            "Pagtatakda ng school schedule", "Pagpi-print ng libro", "Paglalakbay sa ibang bansa",
+            "Pag-iwas sa halalan", "Modernong aklat-aralin"
+        ).filter { it != correct }
+        val choices = textChoices(correct, alternatives, level + i)
+        BankItem("$question • Antas $level", choices, choices.indexOf(correct), "Ang tamang sagot ay $correct.")
+    }
+}
 
-    else -> emptyList()
+private fun ictQuestions(level: Int): List<BankItem> {
+    val items = when {
+        level <= 25 -> listOf(
+            "Ano ang ibig sabihin ng CPU?" to "Central Processing Unit",
+            "Alin ang input device?" to "Keyboard",
+            "Ano ang gamit ng web browser?" to "Mag-access ng websites",
+            "Alin ang operating system?" to "Android",
+            "Ano ang tawag sa programang tumutulong laban sa malware?" to "Antivirus",
+            "Alin ang output device?" to "Monitor",
+            "Ano ang ginagamit upang mag-type ng text?" to "Keyboard",
+            "Ano ang file extension ng karaniwang larawan?" to ".jpg"
+        )
+        level <= 50 -> listOf(
+            "Ano ang RAM?" to "Temporary working memory",
+            "Ano ang LAN?" to "Local Area Network",
+            "Ano ang URL?" to "Web address",
+            "Ano ang cloud storage?" to "Online storage accessed through a network",
+            "Ano ang phishing?" to "Panlilinlang para makuha ang sensitibong impormasyon",
+            "Ano ang backup?" to "Kopya ng data para sa recovery",
+            "Ano ang algorithm?" to "Sunod-sunod na hakbang para malutas ang problema",
+            "Ano ang database?" to "Organisadong koleksiyon ng data"
+        )
+        level <= 75 -> listOf(
+            "Ano ang IP address?" to "Address ng device sa network",
+            "Ano ang encryption?" to "Pagbabago ng data sa anyong mas mahirap basahin nang walang key",
+            "Ano ang two-factor authentication?" to "Pagpapatunay gamit ang dalawang uri ng factor",
+            "Ano ang loop sa programming?" to "Umuulit na bahagi ng code",
+            "Ano ang variable?" to "Pangalan para sa value na maaaring magbago",
+            "Ano ang HTTP?" to "Protocol na ginagamit para sa web communication",
+            "Ano ang firewall?" to "System na kumokontrol sa network traffic",
+            "Ano ang version control?" to "Pamamahala sa mga pagbabago sa files o code"
+        )
+        else -> listOf(
+            "Ano ang hashing?" to "Pagbuo ng fixed-length digest mula sa data",
+            "Ano ang API?" to "Interface na nagpapahintulot sa software systems na mag-usap",
+            "Ano ang database index?" to "Structure na nagpapabilis ng ilang queries",
+            "Ano ang authentication?" to "Pagpapatunay ng identity",
+            "Ano ang authorization?" to "Pagpapatukoy kung ano ang pinapayagang gawin ng user",
+            "Ano ang least privilege principle?" to "Ibigay lamang ang kinakailangang access",
+            "Ano ang recursion?" to "Function na tumatawag sa sarili nito sa problemang may base case",
+            "Ano ang debugging?" to "Paghahanap at pag-aayos ng errors sa program"
+        )
+    }
+
+    return items.mapIndexed { i, (question, correct) ->
+        val alternatives = listOf(
+            "Central Audio Processor", "Mouse", "Mag-edit ng larawan offline", "Windows keyboard",
+            "Game", "Printer", "Microphone", ".txt",
+            "Permanent disk storage", "Wide Area Network", "Computer password", "Offline notebook",
+            "Pag-compress ng video", "Pag-delete ng files", "Random na instruction", "Larawan lamang",
+            "Username", "Pagpapaikli ng text", "Isang password lamang", "Isang comment",
+            "Constant na hindi nagbabago", "Email-only protocol", "App icon", "Pag-save ng screenshot",
+            "Password list", "Random data", "Pagbibigay ng lahat ng access", "Pag-uulit nang walang condition",
+            "Function na hindi kailanman tumatakbo", "Pag-format ng computer"
+        ).filter { it != correct }
+        val choices = textChoices(correct, alternatives, level + i)
+        BankItem("$question • Level $level", choices, choices.indexOf(correct), "The correct answer is $correct.")
+    }
+}
+
+private fun peHealthQuestions(level: Int): List<BankItem> {
+    val items = when {
+        level <= 25 -> listOf(
+            "Ano ang magandang gawin bago mag-ehersisyo?" to "Warm-up",
+            "Bakit mahalaga ang hydration?" to "Para mapalitan ang fluid na nawawala",
+            "Alin ang cardiovascular exercise?" to "Jumping jacks",
+            "Ano ang mahalagang bahagi ng balanced lifestyle?" to "Regular activity at sapat na pahinga",
+            "Ano ang dapat gawin kapag nakakaramdam ng matinding sakit habang nag-eehersisyo?" to "Huminto at magsabi sa trusted adult/coach",
+            "Bakit mahalaga ang stretching?" to "Nakatutulong sa flexibility at paghahanda ng katawan",
+            "Alin ang halimbawa ng muscular-strength activity?" to "Bodyweight squats",
+            "Ano ang pangunahing layunin ng cool-down?" to "Unti-unting ibalik sa normal ang katawan"
+        )
+        level <= 50 -> listOf(
+            "Ano ang fitness component na tumutukoy sa kakayahan ng puso at baga na magtrabaho nang matagal?" to "Cardiorespiratory endurance",
+            "Ano ang flexibility?" to "Kakayahang igalaw ang joints sa angkop na range",
+            "Ano ang muscular endurance?" to "Kakayahang paulit-ulit na gamitin ang muscles",
+            "Ano ang balanced meal?" to "Pagkain na may iba't ibang nutrient-rich food groups",
+            "Bakit mahalaga ang sapat na tulog?" to "Nakatutulong ito sa recovery at normal na paggana ng katawan",
+            "Ano ang halimbawa ng moderate physical activity?" to "Brisk walking",
+            "Ano ang tamang prinsipyo sa pagtaas ng training load?" to "Unti-unti at naaangkop sa kakayahan",
+            "Ano ang dapat gawin bago gumamit ng sports equipment?" to "Suriin kung ligtas at maayos itong gamitin"
+        )
+        level <= 75 -> listOf(
+            "Ano ang overload principle?" to "Unti-unting pagdagdag ng hamon sa katawan",
+            "Ano ang specificity principle?" to "Ang training ay dapat tumugma sa layunin",
+            "Ano ang rest and recovery?" to "Panahon para makabawi ang katawan pagkatapos ng activity",
+            "Ano ang healthy stress-management habit?" to "Regular activity, pahinga, at pakikipag-usap sa taong pinagkakatiwalaan",
+            "Ano ang ibig sabihin ng good posture?" to "Maayos na alignment ng katawan habang gumagalaw o nakaupo",
+            "Ano ang injury-prevention strategy?" to "Tamang technique at unti-unting progression",
+            "Ano ang kahalagahan ng warm-up?" to "Ihanda ang katawan para sa physical activity",
+            "Ano ang role ng hydration sa activity?" to "Tumulong mapanatili ang normal na fluid balance"
+        )
+        else -> listOf(
+            "Ano ang FITT principle?" to "Frequency, Intensity, Time, at Type",
+            "Ano ang periodization?" to "Pagpaplano ng training sa magkakaibang phases",
+            "Ano ang training specificity?" to "Pagpili ng exercises na angkop sa target adaptation",
+            "Ano ang RPE?" to "Rating of Perceived Exertion",
+            "Ano ang recovery indicator?" to "Pagtingin sa performance, pagod, tulog, at pakiramdam",
+            "Ano ang pinakamainam na approach sa long-term fitness?" to "Consistent, progressive, at sustainable na routine",
+            "Ano ang injury-risk reduction approach?" to "Progressive load, tamang technique, at sapat na recovery",
+            "Ano ang health-related fitness?" to "Fitness qualities na may kaugnayan sa pangkalahatang kalusugan"
+        )
+    }
+
+    return items.mapIndexed { i, (question, correct) ->
+        val alternatives = listOf(
+            "Matulog agad", "Iwasan ang tubig", "Reading", "Laging puyat",
+            "Ipagpatuloy ang activity kahit masakit", "Pagpigil sa lahat ng movement",
+            "Bodyweight squats", "Biglang huminto pagkatapos ng intense activity",
+            "Maximum strength only", "Kakayahang magbasa", "Kakayahang humawak ng libro",
+            "Isang uri ng pagkain lamang", "Mas kaunting tulog", "Brisk walking",
+            "Biglang pinakamabigat na load", "Huwag suriin ang equipment",
+            "Pagbabago nang walang plano", "Training para sa lahat ng sport nang sabay",
+            "Walang pahinga", "Pag-iwas sa lahat ng activity", "Pag-arko ng katawan",
+            "Pagmamadali sa exercises", "Paghahanda pagkatapos ng activity",
+            "Pagpapanatili ng fluid balance", "Fast, Ice, Train, Test",
+            "Random na daily exercises", "Exercise na walang layunin", "Rate of Physical Training",
+            "Performance lamang", "Extreme routine", "Training nang walang recovery",
+            "Academic fitness"
+        ).filter { it != correct }
+        val choices = textChoices(correct, alternatives, level + i)
+        BankItem("$question • Level $level", choices, choices.indexOf(correct), "Ang tamang sagot ay $correct.")
+    }
+}
+
+private fun extraQuestions(subject: String, level: Int): List<BankItem> {
+    val pairs = when (subject) {
+        "Math" -> (1..12).map { i ->
+            val x = level + i
+            val y = (level % 5) + i
+            val ans = x + y
+            "Solve: $x + $y = ?" to ans.toString()
+        }
+        "Science" -> listOf(
+            "Which state of matter has particles packed closely together?" to "Solid",
+            "What do animals need for cellular respiration?" to "Oxygen",
+            "What is the process of liquid water becoming gas?" to "Evaporation",
+            "What instrument measures temperature?" to "Thermometer",
+            "What is Earth's natural satellite?" to "Moon",
+            "What organ is mainly used for breathing?" to "Lungs",
+            "What source provides most energy for Earth's climate system?" to "Sun",
+            "What is a change from gas to liquid called?" to "Condensation",
+            "What simple machine uses a wheel and axle?" to "Wheel and axle",
+            "What protects Earth from much harmful solar radiation?" to "Atmosphere",
+            "What is the center of an atom called?" to "Nucleus",
+            "What happens to shadows when a light source is blocked?" to "They form"
+        )
+        "English" -> listOf(
+            "Which word is a pronoun?" to "they",
+            "Which word is a preposition?" to "under",
+            "Which word is a conjunction?" to "and",
+            "What is the past tense of 'teach'?" to "taught",
+            "What is the plural of 'leaf'?" to "leaves",
+            "Which word is an adverb?" to "carefully",
+            "What is a synonym for 'rapid'?" to "fast",
+            "What is an antonym of 'generous'?" to "selfish",
+            "What is the purpose of a conclusion?" to "Wrap up the main ideas",
+            "What does context help a reader determine?" to "Meaning",
+            "What is a paragraph's central idea?" to "Its main point",
+            "What is a reliable source?" to "A source supported by trustworthy evidence"
+        )
+        "Filipino" -> listOf(
+            "Alin ang panghalip?" to "sila",
+            "Alin ang pang-abay?" to "mabilis",
+            "Alin ang pangatnig?" to "at",
+            "Ano ang nakaraan ng 'kumain'?" to "Kumain",
+            "Ano ang kasingkahulugan ng 'mabilis'?" to "matulin",
+            "Ano ang kasalungat ng 'malaki'?" to "maliit",
+            "Ano ang gamit ng pang-uri?" to "Maglarawan",
+            "Ano ang gamit ng pandiwa?" to "Magsaad ng kilos o pangyayari",
+            "Ano ang pangunahing diwa?" to "Pinakamahalagang kaisipan",
+            "Ano ang paksa?" to "Pinag-uusapan",
+            "Ano ang talata?" to "Pangkat ng magkakaugnay na pangungusap",
+            "Ano ang salawikain?" to "Kasabihang may aral"
+        )
+        "Araling Panlipunan" -> listOf(
+            "Ano ang tawag sa pag-aaral ng mapa at lokasyon?" to "Heograpiya",
+            "Ano ang tawag sa kabuhayan ng mga tao?" to "Ekonomiya",
+            "Ano ang ibig sabihin ng demograpiya?" to "Pag-aaral ng populasyon",
+            "Ano ang pangunahing sangay ng pamahalaang nagpapatupad ng batas?" to "Ehekutibo",
+            "Ano ang tawag sa sangay na nagbibigay-kahulugan sa batas?" to "Hudikatura",
+            "Ano ang teritoryo?" to "Sakop na lupain at katubigan ng isang estado",
+            "Ano ang kultura?" to "Paraan ng pamumuhay ng isang pangkat",
+            "Ano ang kalakalan?" to "Palitan o pagbili at pagbebenta ng produkto",
+            "Ano ang badyet?" to "Plano para sa kita at paggasta",
+            "Ano ang census?" to "Opisyal na pagbibilang at paglalarawan ng populasyon",
+            "Ano ang pamahalaan?" to "Institusyong namamahala sa isang pamayanan o bansa",
+            "Ano ang responsableng mamamayan?" to "Taong tumutupad sa tungkulin at gumagalang sa karapatan ng iba"
+        )
+        "ICT" -> listOf(
+            "Ano ang ibig sabihin ng URL?" to "Uniform Resource Locator",
+            "Ano ang ibig sabihin ng RAM?" to "Random Access Memory",
+            "Ano ang tawag sa pisikal na bahagi ng computer?" to "Hardware",
+            "Ano ang tawag sa mga program at apps?" to "Software",
+            "Ano ang gamit ng search engine?" to "Maghanap ng impormasyon online",
+            "Ano ang secure password?" to "Mahaba at unique na password",
+            "Ano ang malware?" to "Malicious software",
+            "Ano ang backup?" to "Kopya ng data",
+            "Ano ang network?" to "Mga device na magkakaugnay para magbahagi ng data",
+            "Ano ang spreadsheet?" to "Tool para sa tabular data at calculations",
+            "Ano ang presentation software?" to "Software para gumawa ng slides",
+            "Ano ang programming language?" to "Wika para magbigay ng instructions sa computer"
+        )
+        "PE & Health" -> listOf(
+            "Ano ang flexibility?" to "Kakayahang igalaw ang joints sa angkop na range",
+            "Ano ang strength?" to "Kakayahang lumikha ng puwersa ang muscles",
+            "Ano ang endurance?" to "Kakayahang magpatuloy sa activity",
+            "Ano ang warm-up?" to "Paghahanda ng katawan bago ang activity",
+            "Ano ang cool-down?" to "Unti-unting pagpapababa ng intensity pagkatapos ng activity",
+            "Ano ang hydration?" to "Pagpapanatili ng sapat na fluid sa katawan",
+            "Ano ang balanced diet?" to "Iba't ibang nutrient-rich foods sa tamang dami",
+            "Ano ang rest day?" to "Panahong nakalaan para sa recovery",
+            "Ano ang proper technique?" to "Ligtas at tamang paraan ng pagsasagawa ng exercise",
+            "Ano ang physical activity?" to "Galaw ng katawan na gumagamit ng energy",
+            "Ano ang healthy habit?" to "Regular na activity, sapat na pahinga, at masustansiyang pagkain",
+            "Ano ang safety check?" to "Pagsuri sa lugar at equipment bago activity"
+        )
+        else -> emptyList()
+    }
+
+    return pairs.mapIndexed { i, (question, correct) ->
+        val alternatives = when (subject) {
+            "Math" -> {
+                val answer = correct.toInt()
+                intChoices(answer, level + 100 + i).filter { it != correct }.take(3)
+            }
+            "Science" -> listOf("Energy", "Gravity", "Cell", "Water", "Air", "Rock", "Heat", "Light").filter { it != correct }
+            "English" -> listOf("quickly", "table", "because", "walk", "beautiful", "them", "slow", "finish").filter { it != correct }
+            "Filipino" -> listOf("mesa", "tumakbo", "maganda", "ngunit", "ako", "mabagal", "bahay", "masaya").filter { it != correct }
+            "Araling Panlipunan" -> listOf("Ekonomiks", "Kasaysayan", "Pamahalaan", "Barangay", "Buwis", "Kultura", "Kalakalan", "Populasyon").filter { it != correct }
+            "ICT" -> listOf("Mouse", "Monitor", "Browser", "File", "Internet", "Printer", "Keyboard", "Database").filter { it != correct }
+            else -> listOf("Reading", "Sleeping", "Running", "Typing", "Skipping", "Eating", "Drawing", "Resting").filter { it != correct }
+        }
+        val choices = textChoices(correct, alternatives, level + 100 + i)
+        BankItem("$question • Level $level", choices, choices.indexOf(correct), "The correct answer is $correct.")
+    }
 }
 
 private fun makeFlashcards(): List<Flashcard> = listOf(
