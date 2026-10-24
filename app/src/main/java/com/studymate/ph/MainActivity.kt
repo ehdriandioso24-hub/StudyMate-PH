@@ -68,11 +68,12 @@ private data class BankItem(
     val type: String = "Multiple Choice"
 )
 
-private val bg = Color(0xFF071521)
-private val panel = Color(0xFF10283A)
-private val purple = Color(0xFF22D3EE)
-private val pink = Color(0xFF818CF8)
-private val muted = Color(0xFFA7C4D4)
+private val bg = Color(0xFF07111F)
+private val panel = Color(0xFF111C30)
+private val purple = Color(0xFF9B7BFF)
+private val pink = Color(0xFFFF72C6)
+private val cyan = Color(0xFF35D7F2)
+private val muted = Color(0xFFB4C2D8)
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -81,12 +82,12 @@ class MainActivity : ComponentActivity() {
         val appPrefs = getSharedPreferences("studymate_data", Context.MODE_PRIVATE)
         setContent {
             val appColors = darkColorScheme(
-                primary = Color(0xFF22D3EE),
-                secondary = Color(0xFF818CF8),
-                tertiary = Color(0xFF34D399),
-                background = Color(0xFF071521),
-                surface = Color(0xFF10283A),
-                onPrimary = Color(0xFF04202A),
+                primary = Color(0xFF9B7BFF),
+                secondary = Color(0xFF35D7F2),
+                tertiary = Color(0xFFFF72C6),
+                background = Color(0xFF07111F),
+                surface = Color(0xFF111C30),
+                onPrimary = Color(0xFF100A25),
                 onBackground = Color(0xFFE6F7FF),
                 onSurface = Color(0xFFE6F7FF)
             )
@@ -702,8 +703,8 @@ private fun StudyMateApp() {
                 modifier = Modifier
                     .fillMaxSize()
                     .verticalScroll(rememberScrollState())
-                    .padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
+                    .padding(horizontal = 18.dp, vertical = 18.dp),
+                verticalArrangement = Arrangement.spacedBy(18.dp)
             ) {
                 when (currentScreen) {
                     Screen.HOME -> {
@@ -762,14 +763,14 @@ private fun StudyMateApp() {
                             title = "📝 Exam Mode",
                             subtitle = "20 mixed questions • 60 seconds each • 3 lives • no free power-ups",
                             badge = "EXAM",
-                            accent = Color(0xFF22D3EE),
+                            accent = Color(0xFF35D7F2),
                             onClick = { startExamMode() }
                         )
                         NeonActionCard(
                             title = "Review Wrong Answers",
                             subtitle = "Retry ${history.count { !it.correct }} saved incorrect answers",
                             badge = "PRACTICE",
-                            accent = Color(0xFF818CF8),
+                            accent = Color(0xFF9B7BFF),
                             onClick = { screen = Screen.REVIEW.name }
                         )
 
@@ -777,7 +778,7 @@ private fun StudyMateApp() {
                             title = "Quick Quiz",
                             subtitle = "Mixed questions from all 7 subjects",
                             badge = "Fast XP",
-                            accent = Color(0xFFC084FC),
+                            accent = Color(0xFFFF72C6),
                             onClick = { openQuickQuiz() }
                         )
 
@@ -1698,9 +1699,9 @@ private fun CardBox(title: String, subtitle: String, onClick: () -> Unit = {}) {
                 .background(
                     Brush.linearGradient(
                         listOf(
-                            Color(0xFF111827).copy(alpha = 0.94f),
-                            Color(0xFF172554).copy(alpha = 0.78f),
-                            Color(0xFF0B1020).copy(alpha = 0.96f)
+                            Color(0xFF172238).copy(alpha = 0.98f),
+                            Color(0xFF131D35).copy(alpha = 0.96f),
+                            Color(0xFF0E1728).copy(alpha = 0.99f)
                         )
                     )
                 )
@@ -1737,7 +1738,7 @@ private fun NeonHeroCard(
                 .fillMaxWidth()
                 .background(
                     Brush.linearGradient(
-                        listOf(Color(0xFF312E81), Color(0xFF111827), Color(0xFF0F172A))
+                        listOf(Color(0xFF30266F), Color(0xFF151E35), Color(0xFF101827))
                     )
                 )
                 .padding(18.dp)
@@ -1745,14 +1746,14 @@ private fun NeonHeroCard(
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
-                        Text("StudyMate PH", color = Color(0xFFA78BFA), fontWeight = FontWeight.ExtraBold)
+                        Text("✦  StudyMate PH", color = Color(0xFFB69AFF), fontWeight = FontWeight.ExtraBold, style = MaterialTheme.typography.titleMedium)
                         Text("Welcome, $name! ✨", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.ExtraBold)
                         Text("Level $level • $achievements achievements unlocked", color = muted, style = MaterialTheme.typography.bodySmall)
                     }
                     Surface(
                         shape = MaterialTheme.shapes.large,
-                        color = Color(0xFF0F172A).copy(alpha = 0.82f),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFF59E0B).copy(alpha = 0.45f))
+                        color = Color(0xFF101A2B).copy(alpha = 0.96f),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFFFC857).copy(alpha = 0.48f))
                     ) {
                         Text("🪙 $coins", modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp), color = Color(0xFFFDE68A), fontWeight = FontWeight.ExtraBold)
                     }
@@ -1788,7 +1789,7 @@ private fun NeonActionCard(
                 .fillMaxWidth()
                 .background(
                     Brush.horizontalGradient(
-                        listOf(accent.copy(alpha = 0.20f), Color(0xFF111827).copy(alpha = 0.88f), Color(0xFF0B1020).copy(alpha = 0.96f))
+                        listOf(accent.copy(alpha = 0.20f), Color(0xFF172238).copy(alpha = 0.94f), Color(0xFF0E1728).copy(alpha = 0.99f))
                     )
                 )
                 .padding(16.dp),
@@ -1826,7 +1827,7 @@ private fun GlassTopBar(
     onProfile: () -> Unit
 ) {
     Row(
-        Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
+        Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = 18.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         if (screen != Screen.HOME) {
@@ -1834,14 +1835,14 @@ private fun GlassTopBar(
             Spacer(Modifier.width(8.dp))
         }
         Column(Modifier.weight(1f)) {
-            Text("StudyMate PH", color = Color(0xFFC084FC), fontWeight = FontWeight.ExtraBold)
+            Text("StudyMate PH", color = Color(0xFFB69AFF), fontWeight = FontWeight.ExtraBold, style = MaterialTheme.typography.titleMedium)
             Text("Level $level • Learn smarter, one day at a time", color = muted, style = MaterialTheme.typography.bodySmall)
         }
         Surface(
             modifier = Modifier.clickable(onClick = onProfile),
             shape = MaterialTheme.shapes.large,
-            color = Color(0xFF0F172A).copy(alpha = 0.82f),
-            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFF59E0B).copy(alpha = 0.38f))
+            color = Color(0xFF172238).copy(alpha = 0.96f),
+            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFFFC857).copy(alpha = 0.42f))
         ) {
             Text("🪙 $coins  👤", modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp), color = Color(0xFFFDE68A), fontWeight = FontWeight.Bold)
         }
@@ -1861,9 +1862,9 @@ private fun GlassBottomNav(
         Triple(Screen.PROFILE, "👤", "Profile")
     )
     Surface(
-        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp).navigationBarsPadding(),
         shape = MaterialTheme.shapes.extraLarge,
-        color = Color(0xFF0F172A).copy(alpha = 0.92f),
+        color = Color(0xFF0D1729).copy(alpha = 0.98f),
         border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.10f)),
         shadowElevation = 10.dp
     ) {
@@ -1876,15 +1877,15 @@ private fun GlassBottomNav(
                 Surface(
                     modifier = Modifier.weight(1f).clickable { onNavigate(item) },
                     shape = MaterialTheme.shapes.large,
-                    color = if (selected) Color(0xFF7C3AED).copy(alpha = 0.28f) else Color.Transparent,
-                    border = if (selected) androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFA78BFA).copy(alpha = 0.35f)) else null
+                    color = if (selected) Color(0xFF8B5CF6).copy(alpha = 0.24f) else Color.Transparent,
+                    border = if (selected) androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFB69AFF).copy(alpha = 0.48f)) else null
                 ) {
                     Column(
                         Modifier.padding(vertical = 8.dp),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         Text(icon)
-                        Text(label, style = MaterialTheme.typography.labelSmall, color = if (selected) Color(0xFFE9D5FF) else muted)
+                        Text(label, style = MaterialTheme.typography.labelSmall, color = if (selected) Color(0xFFE7DDFF) else muted)
                     }
                 }
             }
