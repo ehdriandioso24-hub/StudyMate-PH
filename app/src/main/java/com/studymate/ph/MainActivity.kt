@@ -169,8 +169,30 @@ private fun StudyMateApp() {
     var skipItems by remember { mutableIntStateOf(prefs.getInt("item_skip", 0).coerceAtLeast(0)) }
     var selectedSubject by rememberSaveable { mutableStateOf(prefs.getString("activeSelectedSubject", "Mixed") ?: "Mixed") }
     var tickingSound by remember { mutableStateOf(prefs.getBoolean("tickingSound", true)) }
-    val toneGenerator = remember { ToneGenerator(AudioManager.STREAM_MUSIC, 55) }
+    val toneGenerator = remember { ToneGenerator(AudioManager.STREAM_MUSIC, 100) }
+    var showLoadingScreen by rememberSaveable { mutableStateOf(true) }
+    LaunchedEffect(Unit) { delay(1600); showLoadingScreen = false }
     DisposableEffect(Unit) { onDispose { toneGenerator.release() } }
+
+    // A short synthesized welcome melody plays on Home without requiring an audio asset.
+    LaunchedEffect(screen, tickingSound) {
+        if (screen == Screen.HOME.name && tickingSound) {
+            val melody = listOf(
+                ToneGenerator.TONE_DTMF_1, ToneGenerator.TONE_DTMF_3,
+                ToneGenerator.TONE_DTMF_5, ToneGenerator.TONE_DTMF_3,
+                ToneGenerator.TONE_DTMF_2, ToneGenerator.TONE_DTMF_4
+            )
+            while (screen == Screen.HOME.name && tickingSound) {
+                melody.forEach { note ->
+                    if (screen == Screen.HOME.name && tickingSound) {
+                        runCatching { toneGenerator.startTone(note, 130) }
+                        delay(210)
+                    }
+                }
+                delay(7000)
+            }
+        }
+    }
 
 
     var loggedIn by remember {
@@ -364,7 +386,7 @@ private fun StudyMateApp() {
         }
         val isCorrect = index == q.answer
         if (isCorrect) {
-            if (tickingSound) runCatching { toneGenerator.startTone(ToneGenerator.TONE_PROP_ACK, 120) }
+            if (tickingSound) runCatching { toneGenerator.startTone(ToneGenerator.TONE_PROP_ACK, 320) }
             experienceXp += 10
             correct++
             answered++
@@ -375,6 +397,7 @@ private fun StudyMateApp() {
             saveProgress()
             android.widget.Toast.makeText(context, "Correct! +10 coins 🪙", android.widget.Toast.LENGTH_SHORT).show()
         } else {
+            if (tickingSound) runCatching { toneGenerator.startTone(ToneGenerator.TONE_PROP_NACK, 420) }
             answered++
             history.add(0, ReviewItem(q, index, false, level))
             while (history.size > 500) history.removeAt(history.lastIndex)
@@ -560,6 +583,7 @@ private fun StudyMateApp() {
         val isCorrect = !timedOut && index == q.answer
         answered++
         if (isCorrect) {
+            if (tickingSound) runCatching { toneGenerator.startTone(ToneGenerator.TONE_PROP_ACK, 360) }
             correct++
             experienceXp += 10
             quizCorrect++
@@ -569,7 +593,7 @@ private fun StudyMateApp() {
             quizScore += 100 + speedBonus + comboBonus
             coins += 10
         } else {
-            if (tickingSound) runCatching { toneGenerator.startTone(ToneGenerator.TONE_PROP_NACK, 160) }
+            if (tickingSound) runCatching { toneGenerator.startTone(ToneGenerator.TONE_PROP_NACK, 420) }
             lives = (lives - 1).coerceAtLeast(0)
             streak = 0
         }
@@ -614,6 +638,10 @@ private fun StudyMateApp() {
         val total = questions.size.coerceAtLeast(1)
         val passNeeded = kotlin.math.ceil(total * 0.75).toInt()
         if (quizCorrect >= passNeeded) {
+            if (tickingSound) {
+                // Longer, stronger acknowledgement tone for a quiz win.
+                runCatching { toneGenerator.startTone(ToneGenerator.TONE_PROP_ACK, 700) }
+            }
             if (dailyChallengeActive) {
                 val today = LocalDate.now().toString()
                 if (dailyCompletedDate != today) {
@@ -689,7 +717,10 @@ private fun StudyMateApp() {
         bottomBar = {
             GlassBottomNav(
                 currentScreen = currentScreen,
-                onNavigate = { screen = it.name }
+                onNavigate = { destination ->
+                if (tickingSound) runCatching { toneGenerator.startTone(ToneGenerator.TONE_PROP_BEEP, 90) }
+                screen = destination.name
+            }
             )
         },
         containerColor = MaterialTheme.colorScheme.background
@@ -718,57 +749,12 @@ private fun StudyMateApp() {
                             onProfile = { screen = Screen.PROFILE.name }
                         )
 
-                        // Quick-access tiles use the existing destinations and handlers.
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)
-                        ) {
-                            HomeShortcutTile(
-                                modifier = Modifier.weight(1f),
-                                icon = "🎮",
-                                title = "Quizzes",
-                                subtitle = "Play & earn XP",
-                                accent = Color(0xFF9B7BFF),
-                                onClick = { openQuickQuiz() }
-                            )
-                            HomeShortcutTile(
-                                modifier = Modifier.weight(1f),
-                                icon = "📝",
-                                title = "Study Notes",
-                                subtitle = "Your reviewers",
-                                accent = Color(0xFF35D7F2),
-                                onClick = { screen = Screen.NOTES.name }
-                            )
-                        }
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)
-                        ) {
-                            HomeShortcutTile(
-                                modifier = Modifier.weight(1f),
-                                icon = "🗂️",
-                                title = "Flashcards",
-                                subtitle = "Quick review",
-                                accent = Color(0xFFFF72C6),
-                                onClick = { screen = Screen.FLASHCARDS.name }
-                            )
-                            HomeShortcutTile(
-                                modifier = Modifier.weight(1f),
-                                icon = "📚",
-                                title = "Subjects",
-                                subtitle = "Choose a topic",
-                                accent = Color(0xFF35D7F2),
-                                onClick = { screen = Screen.SUBJECTS.name }
-                            )
-                        }
-
                         if (quizPaused && questions.isNotEmpty() && !quizResultSaved) {
                             Card(
                                 modifier = Modifier.fillMaxWidth(),
                                 shape = RoundedCornerShape(22.dp),
-                                colors = CardDefaults.cardColors(containerColor = Color(0xFF111C30)),
-                                border = androidx.compose.foundation.BorderStroke(1.dp, purple.copy(alpha = 0.42f)),
-                                elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
+                                colors = CardDefaults.cardColors(containerColor = panel),
+                                elevation = CardDefaults.cardElevation(defaultElevation = 6.dp)
                             ) {
                                 Column(
                                     modifier = Modifier.fillMaxWidth().padding(16.dp),
@@ -1211,6 +1197,20 @@ private fun StudyMateApp() {
 
                     else -> {
                         Text("Page under construction.", color = muted)
+                    }
+                }
+            }
+            if (showLoadingScreen) {
+                Box(
+                    modifier = Modifier.fillMaxSize().background(Color(0xFF07111F)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(18.dp)) {
+                        Text("SM", color = purple, style = MaterialTheme.typography.displayLarge, fontWeight = FontWeight.Black)
+                        Text("StudyMate PH", color = Color(0xFFE6F7FF), style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.ExtraBold)
+                        Text("Learn smarter, one day at a time", color = cyan)
+                        CircularProgressIndicator(color = pink, trackColor = panel)
+                        Text("Preparing your study space…", color = muted, style = MaterialTheme.typography.bodyMedium)
                     }
                 }
             }
@@ -1758,51 +1758,6 @@ private fun CardBox(title: String, subtitle: String, onClick: () -> Unit = {}) {
                 Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                 Text(subtitle, color = muted)
             }
-        }
-    }
-}
-
-@Composable
-private fun HomeShortcutTile(
-    modifier: Modifier = Modifier,
-    icon: String,
-    title: String,
-    subtitle: String,
-    accent: Color,
-    onClick: () -> Unit
-) {
-    Surface(
-        modifier = modifier.clickable(onClick = onClick),
-        shape = RoundedCornerShape(20.dp),
-        color = Color(0xFF111C30),
-        border = androidx.compose.foundation.BorderStroke(1.dp, accent.copy(alpha = 0.58f)),
-        shadowElevation = 4.dp
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(
-                    Brush.horizontalGradient(
-                        listOf(accent.copy(alpha = 0.16f), Color(0xFF111C30), Color(0xFF0D1729))
-                    )
-                )
-                .padding(horizontal = 12.dp, vertical = 15.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            Surface(
-                shape = RoundedCornerShape(12.dp),
-                color = accent.copy(alpha = 0.18f),
-                border = androidx.compose.foundation.BorderStroke(1.dp, accent.copy(alpha = 0.45f))
-            ) {
-                Text(icon, modifier = Modifier.padding(9.dp), style = MaterialTheme.typography.titleMedium)
-            }
-            Column(modifier = Modifier.weight(1f)) {
-                Text(title, fontWeight = FontWeight.ExtraBold, color = Color(0xFFEAF7FF), style = MaterialTheme.typography.titleSmall)
-                Spacer(Modifier.height(3.dp))
-                Text(subtitle, color = muted, style = MaterialTheme.typography.labelSmall)
-            }
-            Text("›", color = accent, fontWeight = FontWeight.ExtraBold, style = MaterialTheme.typography.titleLarge)
         }
     }
 }
