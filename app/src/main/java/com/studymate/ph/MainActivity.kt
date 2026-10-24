@@ -3,6 +3,7 @@ package com.studymate.ph
 import android.content.Context
 import android.media.AudioManager
 import android.media.ToneGenerator
+import android.media.SoundPool
 import android.os.Bundle
 import java.time.LocalDate
 import java.time.temporal.ChronoUnit
@@ -74,6 +75,63 @@ private val purple = Color(0xFF9B7BFF)
 private val pink = Color(0xFFFF72C6)
 private val cyan = Color(0xFF35D7F2)
 private val muted = Color(0xFFB4C2D8)
+
+
+/**
+ * Short UI/game sound effects. Files live in app/src/main/res/raw/.
+ * The existing ticking preference controls answer and timer sounds.
+ */
+private object StudyMateSounds {
+    private var pool: SoundPool? = null
+    private val soundIds = mutableMapOf<String, Int>()
+    private val loadedIds = mutableSetOf<Int>()
+
+    @Synchronized
+    fun initialize(context: Context) {
+        if (pool != null) return
+        val soundPool = SoundPool.Builder()
+            .setMaxStreams(6)
+            .setAudioAttributes(
+                android.media.AudioAttributes.Builder()
+                    .setUsage(android.media.AudioAttributes.USAGE_GAME)
+                    .setContentType(android.media.AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                    .build()
+            )
+            .build()
+        pool = soundPool
+        soundPool.setOnLoadCompleteListener { _, sampleId, status ->
+            if (status == 0) synchronized(this) { loadedIds.add(sampleId) }
+        }
+        val appContext = context.applicationContext
+        val resources = listOf(
+            "touch" to R.raw.touch_button,
+            "correct" to R.raw.correct_answer,
+            "wrong" to R.raw.wrong_answer,
+            "level_up" to R.raw.level_up_bravo,
+            "wow" to R.raw.wow_effect
+        )
+        resources.forEach { (name, resourceId) ->
+            runCatching { soundIds[name] = soundPool.load(appContext, resourceId, 1) }
+        }
+    }
+
+    @Synchronized
+    fun play(name: String) {
+        val soundPool = pool ?: return
+        val id = soundIds[name] ?: return
+        if (id in loadedIds) {
+            runCatching { soundPool.play(id, 0.9f, 0.9f, 1, 0, 1f) }
+        }
+    }
+
+    @Synchronized
+    fun release() {
+        runCatching { pool?.release() }
+        pool = null
+        soundIds.clear()
+        loadedIds.clear()
+    }
+}
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -191,6 +249,11 @@ private fun StudyMateSplash() {
 @Composable
 private fun StudyMateApp() {
     val context = LocalContext.current
+
+    DisposableEffect(context) {
+        StudyMateSounds.initialize(context)
+        onDispose { StudyMateSounds.release() }
+    }
 
     val prefs = remember {
         context.getSharedPreferences("studymate_data", Context.MODE_PRIVATE)
@@ -440,7 +503,7 @@ private fun StudyMateApp() {
         }
         val isCorrect = index == q.answer
         if (isCorrect) {
-            if (tickingSound) runCatching { toneGenerator.startTone(ToneGenerator.TONE_PROP_ACK, 120) }
+            if (tickingSound) StudyMateSounds.play("correct")
             experienceXp += 10
             correct++
             answered++
@@ -451,6 +514,7 @@ private fun StudyMateApp() {
             saveProgress()
             android.widget.Toast.makeText(context, "Correct! +10 coins 🪙", android.widget.Toast.LENGTH_SHORT).show()
         } else {
+            if (tickingSound) StudyMateSounds.play("wrong")
             answered++
             history.add(0, ReviewItem(q, index, false, level))
             while (history.size > 500) history.removeAt(history.lastIndex)
@@ -636,6 +700,7 @@ private fun StudyMateApp() {
         val isCorrect = !timedOut && index == q.answer
         answered++
         if (isCorrect) {
+            if (tickingSound) StudyMateSounds.play("correct")
             correct++
             experienceXp += 10
             quizCorrect++
@@ -645,7 +710,7 @@ private fun StudyMateApp() {
             quizScore += 100 + speedBonus + comboBonus
             coins += 10
         } else {
-            if (tickingSound) runCatching { toneGenerator.startTone(ToneGenerator.TONE_PROP_NACK, 160) }
+            if (tickingSound) StudyMateSounds.play("wrong")
             lives = (lives - 1).coerceAtLeast(0)
             streak = 0
         }
@@ -674,6 +739,7 @@ private fun StudyMateApp() {
         if (missionAnswers >= 5 && !missionRewardClaimed) {
             coins += 30
             missionRewardClaimed = true
+            if (tickingSound) StudyMateSounds.play("wow")
             android.widget.Toast.makeText(context, "Daily mission complete! +30 bonus coins 🎁", android.widget.Toast.LENGTH_LONG).show()
         }
         saveProgress()
@@ -721,6 +787,12 @@ private fun StudyMateApp() {
     val currentScreen = runCatching {
         Screen.valueOf(screen)
     }.getOrDefault(Screen.HOME)
+
+    LaunchedEffect(currentScreen) {
+        if (currentScreen == Screen.LEVEL_UP && tickingSound) {
+            StudyMateSounds.play("level_up")
+        }
+    }
 
     BackHandler(enabled = currentScreen != Screen.HOME) {
         if (currentScreen == Screen.QUIZ && !quizResultSaved) {
@@ -805,7 +877,7 @@ private fun StudyMateApp() {
                                 title = "Quizzes",
                                 subtitle = "Play & earn XP",
                                 accent = Color(0xFF9B7BFF),
-                                onClick = { openQuickQuiz() }
+                                onClick = { StudyMateSounds.play("touch");  openQuickQuiz() }
                             )
                             HomeShortcutTile(
                                 modifier = Modifier.weight(1f),
@@ -813,7 +885,7 @@ private fun StudyMateApp() {
                                 title = "Study Notes",
                                 subtitle = "Your reviewers",
                                 accent = Color(0xFF35D7F2),
-                                onClick = { screen = Screen.NOTES.name }
+                                onClick = { StudyMateSounds.play("touch");  screen = Screen.NOTES.name }
                             )
                         }
                         Row(
@@ -826,7 +898,7 @@ private fun StudyMateApp() {
                                 title = "Flashcards",
                                 subtitle = "Quick review",
                                 accent = Color(0xFFFF72C6),
-                                onClick = { screen = Screen.FLASHCARDS.name }
+                                onClick = { StudyMateSounds.play("touch");  screen = Screen.FLASHCARDS.name }
                             )
                             HomeShortcutTile(
                                 modifier = Modifier.weight(1f),
@@ -834,7 +906,7 @@ private fun StudyMateApp() {
                                 title = "Subjects",
                                 subtitle = "Choose a topic",
                                 accent = Color(0xFF35D7F2),
-                                onClick = { screen = Screen.SUBJECTS.name }
+                                onClick = { StudyMateSounds.play("touch");  screen = Screen.SUBJECTS.name }
                             )
                         }
 
@@ -853,12 +925,12 @@ private fun StudyMateApp() {
                                     Text("⏸️ Quiz Paused", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold, color = purple)
                                     Text("Question ${questionIndex + 1} of ${questions.size} • Score: $quizScore • Lives: $lives", color = muted)
                                     Button(
-                                        onClick = { quizPaused = false; screen = Screen.QUIZ.name },
+                                        onClick = { StudyMateSounds.play("touch");  quizPaused = false; screen = Screen.QUIZ.name },
                                         modifier = Modifier.fillMaxWidth(),
                                         shape = RoundedCornerShape(16.dp)
                                     ) { Text("▶ Continue Quiz", fontWeight = FontWeight.Bold) }
                                     OutlinedButton(
-                                        onClick = { retryCurrentQuiz() },
+                                        onClick = { StudyMateSounds.play("touch");  retryCurrentQuiz() },
                                         modifier = Modifier.fillMaxWidth(),
                                         shape = RoundedCornerShape(16.dp)
                                     ) { Text("🔄 Restart Quiz") }
@@ -885,14 +957,14 @@ private fun StudyMateApp() {
                             subtitle = "20 mixed questions • 60 seconds each • 3 lives • no free power-ups",
                             badge = "EXAM",
                             accent = Color(0xFF35D7F2),
-                            onClick = { startExamMode() }
+                            onClick = { StudyMateSounds.play("touch");  startExamMode() }
                         )
                         NeonActionCard(
                             title = "Review Wrong Answers",
                             subtitle = "Retry ${history.count { !it.correct }} saved incorrect answers",
                             badge = "PRACTICE",
                             accent = Color(0xFF9B7BFF),
-                            onClick = { screen = Screen.REVIEW.name }
+                            onClick = { StudyMateSounds.play("touch");  screen = Screen.REVIEW.name }
                         )
 
                         NeonActionCard(
@@ -900,7 +972,7 @@ private fun StudyMateApp() {
                             subtitle = "Mixed questions from all 7 subjects",
                             badge = "Fast XP",
                             accent = Color(0xFFFF72C6),
-                            onClick = { openQuickQuiz() }
+                            onClick = { StudyMateSounds.play("touch");  openQuickQuiz() }
                         )
 
                         NeonActionCard(
@@ -908,7 +980,7 @@ private fun StudyMateApp() {
                             subtitle = "20 questions • 30 sec each • 3 lives • 75% to pass",
                             badge = "RED ZONE",
                             accent = Color(0xFFF43F5E),
-                            onClick = { startQuiz("Mixed", daily = false) }
+                            onClick = { StudyMateSounds.play("touch");  startQuiz("Mixed", daily = false) }
                         )
 
                         NeonActionCard(
@@ -916,7 +988,7 @@ private fun StudyMateApp() {
                             subtitle = "10 mixed questions • +100 coins bonus • Streak: $dailyStreak",
                             badge = if (dailyCompletedDate == LocalDate.now().toString()) "Done Today" else "Ready",
                             accent = Color(0xFFF59E0B),
-                            onClick = { startQuiz("Mixed", daily = true) }
+                            onClick = { StudyMateSounds.play("touch");  startQuiz("Mixed", daily = true) }
                         )
 
                         val today = LocalDate.now().toString()
@@ -926,7 +998,7 @@ private fun StudyMateApp() {
                             subtitle = if (claimed) "Come back tomorrow for another +25 coins" else "Tap here to claim your free +25 coins!",
                             badge = if (claimed) "Claimed" else "+25 Coins",
                             accent = Color(0xFF10B981),
-                            onClick = { claimDailyLoginCoins() }
+                            onClick = { StudyMateSounds.play("touch");  claimDailyLoginCoins() }
                         )
 
                         NeonActionCard(
@@ -934,7 +1006,7 @@ private fun StudyMateApp() {
                             subtitle = "Spend coins on 50:50, +15 sec, and Skip • $coins coins available",
                             badge = "Power-Ups",
                             accent = Color(0xFF06B6D4),
-                            onClick = { showCoinShopModal = true }
+                            onClick = { StudyMateSounds.play("touch");  showCoinShopModal = true }
                         )
 
                         NeonActionCard(
@@ -942,7 +1014,7 @@ private fun StudyMateApp() {
                             subtitle = "7 subjects • Level 1–100",
                             badge = "Categories",
                             accent = Color(0xFF3B82F6),
-                            onClick = { screen = Screen.SUBJECTS.name }
+                            onClick = { StudyMateSounds.play("touch");  screen = Screen.SUBJECTS.name }
                         )
 
                         NeonActionCard(
@@ -950,7 +1022,7 @@ private fun StudyMateApp() {
                             subtitle = "Quick memory review cards",
                             badge = "Review",
                             accent = Color(0xFFEC4899),
-                            onClick = { screen = Screen.FLASHCARDS.name }
+                            onClick = { StudyMateSounds.play("touch");  screen = Screen.FLASHCARDS.name }
                         )
 
                         NeonActionCard(
@@ -958,7 +1030,7 @@ private fun StudyMateApp() {
                             subtitle = "Write and save your reviewer notes",
                             badge = "Notes",
                             accent = Color(0xFF8B5CF6),
-                            onClick = { screen = Screen.NOTES.name }
+                            onClick = { StudyMateSounds.play("touch");  screen = Screen.NOTES.name }
                         )
 
                         NeonActionCard(
@@ -966,7 +1038,7 @@ private fun StudyMateApp() {
                             subtitle = "Focus timer with customizable session lengths",
                             badge = "Timer",
                             accent = Color(0xFF6366F1),
-                            onClick = { screen = Screen.TIMER.name }
+                            onClick = { StudyMateSounds.play("touch");  screen = Screen.TIMER.name }
                         )
                     }
 
@@ -982,7 +1054,7 @@ private fun StudyMateApp() {
                             }
                         }
                         OutlinedButton(
-                            onClick = { showSubjectDialog = true },
+                            onClick = { StudyMateSounds.play("touch");  showSubjectDialog = true },
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Text("+ Add Custom Subject")
@@ -1043,7 +1115,7 @@ private fun StudyMateApp() {
                             singleLine = true
                         )
                         Button(
-                            onClick = {
+                            onClick = { StudyMateSounds.play("touch"); 
                                 val friend = friendInput.trim()
                                 if (friend.isNotBlank() && friendNames.none { it.equals(friend, ignoreCase = true) }) {
                                     friendNames.add(friend)
@@ -1069,9 +1141,9 @@ private fun StudyMateApp() {
                                     "${item.question.text}\n\nYour answer: ${item.question.choices.getOrNull(item.selected) ?: "No answer / timeout"}\nCorrect answer: ${item.question.choices.getOrNull(item.question.answer) ?: "Unavailable"}\nExplanation: ${item.question.explanation}"
                                 ) {}
                             }
-                            Button(onClick = { retryWrongAnswers() }, modifier = Modifier.fillMaxWidth()) { Text("🔁 Retry Wrong Answers") }
+                            Button(onClick = { StudyMateSounds.play("touch");  retryWrongAnswers() }, modifier = Modifier.fillMaxWidth()) { Text("🔁 Retry Wrong Answers") }
                         }
-                        OutlinedButton(onClick = { screen = Screen.PROGRESS.name }, modifier = Modifier.fillMaxWidth()) { Text("Back to Statistics") }
+                        OutlinedButton(onClick = { StudyMateSounds.play("touch");  screen = Screen.PROGRESS.name }, modifier = Modifier.fillMaxWidth()) { Text("Back to Statistics") }
                     }
 
                     Screen.SEARCH -> {
@@ -1139,7 +1211,7 @@ private fun StudyMateApp() {
                         if (q == null) {
                             Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
                                 Text("No questions available for this level.")
-                                Button(onClick = { screen = Screen.HOME.name }) { Text("Back to Home") }
+                                Button(onClick = { StudyMateSounds.play("touch");  screen = Screen.HOME.name }) { Text("Back to Home") }
                             }
                         } else {
                             Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
@@ -1167,7 +1239,7 @@ private fun StudyMateApp() {
                                     }
                                 }
                                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                                    OutlinedButton(onClick = {
+                                    OutlinedButton(onClick = { StudyMateSounds.play("touch"); 
                                         if (!examMode && !revealed && (free5050 || fiftyFiftyItems > 0)) {
                                             val wrong = q.choices.indices.filter { it != q.answer && it !in hiddenChoices }.shuffled().take(2).toSet()
                                             hiddenChoices = hiddenChoices + wrong
@@ -1176,7 +1248,7 @@ private fun StudyMateApp() {
                                             saveProgress()
                                         }
                                     }, enabled = !examMode && !revealed && (free5050 || fiftyFiftyItems > 0), modifier = Modifier.weight(1f)) { Text(if (examMode) "🎯 50:50 OFF" else if (free5050) "🎯 50:50 FREE" else "🎯 50:50 ($fiftyFiftyItems)") }
-                                    OutlinedButton(onClick = {
+                                    OutlinedButton(onClick = { StudyMateSounds.play("touch"); 
                                         if (!examMode && !revealed && (freeTime || extraTimeItems > 0)) {
                                             secondsLeft += 15
                                             usedTimeFreeze = true
@@ -1184,7 +1256,7 @@ private fun StudyMateApp() {
                                             saveProgress()
                                         }
                                     }, enabled = !examMode && !revealed && (freeTime || extraTimeItems > 0), modifier = Modifier.weight(1f)) { Text(if (examMode) "⏱ TIME FIXED" else if (freeTime) "⏱ +15 sec FREE" else "⏱ +15 sec ($extraTimeItems)") }
-                                    OutlinedButton(onClick = {
+                                    OutlinedButton(onClick = { StudyMateSounds.play("touch"); 
                                         if (!examMode && !revealed && (freeSkip || skipItems > 0)) {
                                             usedSkip = true
                                             if (!freeSkip && skipItems > 0) skipItems-- else freeSkip = false
@@ -1210,7 +1282,7 @@ private fun StudyMateApp() {
                                             else -> panel
                                         }
                                         Button(
-                                            onClick = { recordAnswer(idx) },
+                                            onClick = { StudyMateSounds.play("touch");  recordAnswer(idx) },
                                             enabled = !revealed,
                                             colors = ButtonDefaults.buttonColors(containerColor = btnColor),
                                             modifier = Modifier.fillMaxWidth()
@@ -1227,7 +1299,7 @@ private fun StudyMateApp() {
                                         fontWeight = FontWeight.Bold
                                     )
                                     Button(
-                                        onClick = {
+                                        onClick = { StudyMateSounds.play("touch"); 
                                             revealed = false
                                             selectedAnswer = -1
                                             hiddenChoices = emptySet()
@@ -1256,8 +1328,8 @@ private fun StudyMateApp() {
                         ) {
                             Text("💔 Game Over", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, color = Color(0xFFF43F5E))
                             Text("Score: $quizScore • Correct: $quizCorrect/${questions.size}", color = muted)
-                            Button(onClick = { retryCurrentQuiz() }, modifier = Modifier.fillMaxWidth()) { Text("Try Again") }
-                            OutlinedButton(onClick = { screen = Screen.HOME.name }, modifier = Modifier.fillMaxWidth()) { Text("Back to Home") }
+                            Button(onClick = { StudyMateSounds.play("touch");  retryCurrentQuiz() }, modifier = Modifier.fillMaxWidth()) { Text("Try Again") }
+                            OutlinedButton(onClick = { StudyMateSounds.play("touch");  screen = Screen.HOME.name }, modifier = Modifier.fillMaxWidth()) { Text("Back to Home") }
                         }
                     }
 
@@ -1269,7 +1341,7 @@ private fun StudyMateApp() {
                         ) {
                             Text("🎉 Level Up!", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, color = Color(0xFF34D399))
                             Text("You reached Level $level in $selectedSubject!", color = muted)
-                            Button(onClick = { screen = Screen.HOME.name }, modifier = Modifier.fillMaxWidth()) { Text("Continue") }
+                            Button(onClick = { StudyMateSounds.play("touch");  screen = Screen.HOME.name }, modifier = Modifier.fillMaxWidth()) { Text("Continue") }
                         }
                     }
 
@@ -1281,7 +1353,7 @@ private fun StudyMateApp() {
                         ) {
                             Text("🏆 Max Level Reached!", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, color = Color(0xFFFDE68A))
                             Text("You completed Level 100!", color = muted)
-                            Button(onClick = { screen = Screen.HOME.name }, modifier = Modifier.fillMaxWidth()) { Text("Back to Home") }
+                            Button(onClick = { StudyMateSounds.play("touch");  screen = Screen.HOME.name }, modifier = Modifier.fillMaxWidth()) { Text("Back to Home") }
                         }
                     }
 
@@ -1473,7 +1545,7 @@ private fun StudyMateModals(
                 )
             },
             confirmButton = {
-                TextButton(onClick = { onAddSubject(subjectInput) }) { Text("Add") }
+                TextButton(onClick = { StudyMateSounds.play("touch");  onAddSubject(subjectInput) }) { Text("Add") }
             },
             dismissButton = {
                 TextButton(onClick = onSubjectDismiss) { Text("Cancel") }
@@ -1530,7 +1602,7 @@ private fun LoginPage(
                 )
 
                 Button(
-                    onClick = {
+                    onClick = { StudyMateSounds.play("touch"); 
                         val cleanName = localName.trim().ifBlank { "Student" }
                         onLogin(cleanName, localEmail.trim())
                     },
@@ -1707,7 +1779,7 @@ private fun ProfilePage(
     )
 
     Button(
-        onClick = { onSave(localName.trim().ifBlank { "Student" }, localEmail.trim()) },
+        onClick = { StudyMateSounds.play("touch");  onSave(localName.trim().ifBlank { "Student" }, localEmail.trim()) },
         modifier = Modifier.fillMaxWidth()
     ) {
         Text("Save Profile")
@@ -1809,7 +1881,7 @@ private fun CardBox(title: String, subtitle: String, onClick: () -> Unit = {}) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick),
+            .clickable { StudyMateSounds.play("touch"); onClick() },
         shape = MaterialTheme.shapes.large,
         border = androidx.compose.foundation.BorderStroke(1.dp, accent.copy(alpha = 0.28f)),
         colors = CardDefaults.cardColors(containerColor = Color.Transparent)
@@ -1848,7 +1920,7 @@ private fun HomeShortcutTile(
     onClick: () -> Unit
 ) {
     Surface(
-        modifier = modifier.clickable(onClick = onClick),
+        modifier = modifier.clickable { StudyMateSounds.play("touch"); onClick() },
         shape = RoundedCornerShape(20.dp),
         color = Color(0xFF111C30),
         border = androidx.compose.foundation.BorderStroke(1.dp, accent.copy(alpha = 0.58f)),
@@ -1945,7 +2017,7 @@ private fun NeonActionCard(
     onClick: () -> Unit
 ) {
     Card(
-        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
+        modifier = Modifier.fillMaxWidth().clickable { StudyMateSounds.play("touch"); onClick() },
         shape = MaterialTheme.shapes.extraLarge,
         border = androidx.compose.foundation.BorderStroke(1.dp, accent.copy(alpha = 0.42f)),
         colors = CardDefaults.cardColors(containerColor = Color.Transparent)
@@ -2041,7 +2113,7 @@ private fun GlassBottomNav(
             items.forEach { (item, icon, label) ->
                 val selected = currentScreen == item
                 Surface(
-                    modifier = Modifier.weight(1f).clickable { onNavigate(item) },
+                    modifier = Modifier.weight(1f).clickable { StudyMateSounds.play("touch"); onNavigate(item) },
                     shape = MaterialTheme.shapes.large,
                     color = if (selected) Color(0xFF8B5CF6).copy(alpha = 0.24f) else Color.Transparent,
                     border = if (selected) androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFB69AFF).copy(alpha = 0.48f)) else null
@@ -2093,7 +2165,7 @@ private fun NotesPage(
     )
 
     Button(
-        onClick = {
+        onClick = { StudyMateSounds.play("touch"); 
             if (title.isNotBlank() || body.isNotBlank()) {
                 val id = editingId
                 if (id == null) {
@@ -2115,7 +2187,7 @@ private fun NotesPage(
 
     if (editingId != null) {
         TextButton(
-            onClick = {
+            onClick = { StudyMateSounds.play("touch"); 
                 editingId = null
                 title = ""
                 body = ""
@@ -2146,7 +2218,7 @@ private fun NotesPage(
 
                 Row {
                     TextButton(
-                        onClick = {
+                        onClick = { StudyMateSounds.play("touch"); 
                             editingId = note.id
                             title = note.title
                             body = note.body
@@ -2156,7 +2228,7 @@ private fun NotesPage(
                     }
 
                     TextButton(
-                        onClick = {
+                        onClick = { StudyMateSounds.play("touch"); 
                             onDelete(note)
                             if (editingId == note.id) {
                                 editingId = null
@@ -2212,14 +2284,14 @@ private fun FlashcardsPage() {
             )
 
             Button(
-                onClick = { showAnswer = !showAnswer },
+                onClick = { StudyMateSounds.play("touch");  showAnswer = !showAnswer },
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Text(if (showAnswer) "Hide Answer" else "Show Answer")
             }
 
             OutlinedButton(
-                onClick = {
+                onClick = { StudyMateSounds.play("touch"); 
                     index = (index + 1) % cards.size
                     showAnswer = false
                 },
@@ -2295,7 +2367,7 @@ private fun TimerPage(prefs: android.content.SharedPreferences) {
 
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 listOf(5, 15, 25, 45, 60).forEach { minutes ->
-                    OutlinedButton(onClick = { choose(minutes) }) {
+                    OutlinedButton(onClick = { StudyMateSounds.play("touch");  choose(minutes) }) {
                         Text("${minutes}m")
                     }
                 }
@@ -2310,7 +2382,7 @@ private fun TimerPage(prefs: android.content.SharedPreferences) {
             )
 
             Button(
-                onClick = {
+                onClick = { StudyMateSounds.play("touch"); 
                     customMinutes.toIntOrNull()
                         ?.takeIf { it in 1..180 }
                         ?.let { choose(it) }
@@ -2321,7 +2393,7 @@ private fun TimerPage(prefs: android.content.SharedPreferences) {
             }
 
             Button(
-                onClick = {
+                onClick = { StudyMateSounds.play("touch"); 
                     if (seconds == 0) seconds = duration * 60
                     running = !running
                 },
@@ -2331,7 +2403,7 @@ private fun TimerPage(prefs: android.content.SharedPreferences) {
             }
 
             OutlinedButton(
-                onClick = {
+                onClick = { StudyMateSounds.play("touch"); 
                     running = false
                     choose(duration)
                 },
@@ -2356,7 +2428,7 @@ private fun TimerPage(prefs: android.content.SharedPreferences) {
             )
 
             Button(
-                onClick = {
+                onClick = { StudyMateSounds.play("touch"); 
                     if (duration !in presets) {
                         presets.add(duration)
                         prefs.edit()
@@ -2371,11 +2443,11 @@ private fun TimerPage(prefs: android.content.SharedPreferences) {
 
             presets.toList().forEach { minutes ->
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    TextButton(onClick = { choose(minutes) }) {
+                    TextButton(onClick = { StudyMateSounds.play("touch");  choose(minutes) }) {
                         Text("Use ${minutes}m preset")
                     }
                     TextButton(
-                        onClick = {
+                        onClick = { StudyMateSounds.play("touch"); 
                             presets.remove(minutes)
                             prefs.edit()
                                 .putString("timerPresets", encodeStrings(presets.map { it.toString() }))
