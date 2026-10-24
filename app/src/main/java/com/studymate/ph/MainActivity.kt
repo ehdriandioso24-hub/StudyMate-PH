@@ -105,9 +105,85 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = appColors.background
                 ) {
-                    StudyMateApp()
+                    var showSplash by remember { mutableStateOf(true) }
+                    LaunchedEffect(Unit) {
+                        delay(2400)
+                        showSplash = false
+                    }
+                    Box(Modifier.fillMaxSize()) {
+                        StudyMateApp()
+                        if (showSplash) {
+                            StudyMateSplash()
+                        }
+                    }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun StudyMateSplash() {
+    var pulse by remember { mutableFloatStateOf(0.72f) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            pulse = if (pulse < 0.9f) 1f else 0.72f
+            delay(420)
+        }
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(
+                Brush.radialGradient(
+                    colors = listOf(Color(0xFF25205A), Color(0xFF10172E), Color(0xFF050B16)),
+                    radius = 1000f
+                )
+            ),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(18.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(116.dp)
+                    .background(
+                        Brush.linearGradient(listOf(cyan.copy(alpha = pulse), purple, pink)),
+                        RoundedCornerShape(34.dp)
+                    )
+                    .padding(3.dp)
+                    .background(Color(0xFF091225), RoundedCornerShape(31.dp)),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    "SM",
+                    color = Color.White,
+                    style = MaterialTheme.typography.displayMedium,
+                    fontWeight = FontWeight.Black
+                )
+            }
+            Text(
+                "StudyMate PH",
+                color = Color.White,
+                style = MaterialTheme.typography.headlineMedium,
+                fontWeight = FontWeight.ExtraBold
+            )
+            Text(
+                "LEARN • LEVEL UP • SHINE",
+                color = cyan,
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.Bold
+            )
+            Spacer(Modifier.height(8.dp))
+            LinearProgressIndicator(
+                modifier = Modifier.width(170.dp).height(4.dp),
+                color = pink,
+                trackColor = Color.White.copy(alpha = 0.12f)
+            )
+            Text("Preparing your study space…", color = muted, style = MaterialTheme.typography.bodySmall)
         }
     }
 }
