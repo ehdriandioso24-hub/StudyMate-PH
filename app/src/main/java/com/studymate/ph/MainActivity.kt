@@ -6,6 +6,8 @@ import android.media.ToneGenerator
 import android.os.Bundle
 import java.time.LocalDate
 import java.time.temporal.ChronoUnit
+import java.time.DayOfWeek
+import java.time.temporal.TemporalAdjusters
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
@@ -66,11 +68,11 @@ private data class BankItem(
     val type: String = "Multiple Choice"
 )
 
-private val bg = Color(0xFF080D1D)
-private val panel = Color(0xFF111A30)
-private val purple = Color(0xFFC084FC)
-private val pink = Color(0xFFF472D0)
-private val muted = Color(0xFFA9B5D0)
+private val bg = Color(0xFF071521)
+private val panel = Color(0xFF10283A)
+private val purple = Color(0xFF22D3EE)
+private val pink = Color(0xFF818CF8)
+private val muted = Color(0xFFA7C4D4)
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -78,23 +80,15 @@ class MainActivity : ComponentActivity() {
 
         val appPrefs = getSharedPreferences("studymate_data", Context.MODE_PRIVATE)
         setContent {
-            var lightTheme by remember { mutableStateOf(appPrefs.getBoolean("lightTheme", false)) }
-            val appColors = if (lightTheme) lightColorScheme(
-                primary = Color(0xFF6D28D9),
-                secondary = Color(0xFFBE185D),
-                background = Color(0xFFF7F7FB),
-                surface = Color.White,
-                onPrimary = Color.White,
-                onBackground = Color(0xFF171725),
-                onSurface = Color(0xFF171725)
-            ) else darkColorScheme(
-                primary = purple,
-                secondary = pink,
-                background = bg,
-                surface = panel,
-                onPrimary = Color(0xFF160D28),
-                onBackground = Color(0xFFF5F3FF),
-                onSurface = Color(0xFFF5F3FF)
+            val appColors = darkColorScheme(
+                primary = Color(0xFF22D3EE),
+                secondary = Color(0xFF818CF8),
+                tertiary = Color(0xFF34D399),
+                background = Color(0xFF071521),
+                surface = Color(0xFF10283A),
+                onPrimary = Color(0xFF04202A),
+                onBackground = Color(0xFFE6F7FF),
+                onSurface = Color(0xFFE6F7FF)
             )
             MaterialTheme(
                 colorScheme = appColors,
@@ -110,13 +104,7 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = appColors.background
                 ) {
-                    StudyMateApp(
-                        lightTheme = lightTheme,
-                        onToggleLightTheme = {
-                            lightTheme = !lightTheme
-                            appPrefs.edit().putBoolean("lightTheme", lightTheme).apply()
-                        }
-                    )
+                    StudyMateApp()
                 }
             }
         }
@@ -124,7 +112,7 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-private fun StudyMateApp(lightTheme: Boolean, onToggleLightTheme: () -> Unit) {
+private fun StudyMateApp() {
     val context = LocalContext.current
 
     val prefs = remember {
@@ -155,6 +143,14 @@ private fun StudyMateApp(lightTheme: Boolean, onToggleLightTheme: () -> Unit) {
     var coins by remember {
         mutableIntStateOf(prefs.getInt("coins", prefs.getInt("xp", 0)).coerceAtLeast(0))
     }
+    var experienceXp by remember { mutableIntStateOf(prefs.getInt("experienceXp", 0).coerceAtLeast(0)) }
+    val currentWeekKey = LocalDate.now().with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY)).toString()
+    var weeklyChallengeKey by remember { mutableStateOf(prefs.getString("weeklyChallengeKey", currentWeekKey) ?: currentWeekKey) }
+    var weeklyAnswers by remember { mutableIntStateOf(prefs.getInt("weeklyAnswers", 0).coerceAtLeast(0)) }
+    var weeklyRewardClaimed by remember { mutableStateOf(prefs.getBoolean("weeklyRewardClaimed", false)) }
+    val friendNames = remember { mutableStateListOf<String>().apply { addAll(decodeStrings(prefs.getString("friendNames", "[]") ?: "[]")) } }
+    var friendInput by rememberSaveable { mutableStateOf("") }
+    var examMode by rememberSaveable { mutableStateOf(prefs.getBoolean("activeExamMode", false)) }
     var dailyStreak by remember {
         mutableIntStateOf(prefs.getInt("dailyStreak", 0).coerceAtLeast(0))
     }
@@ -263,11 +259,23 @@ private fun StudyMateApp(lightTheme: Boolean, onToggleLightTheme: () -> Unit) {
             showCoinBurst = false
         }
     }
+    LaunchedEffect(currentWeekKey) {
+        if (weeklyChallengeKey != currentWeekKey) {
+            weeklyChallengeKey = currentWeekKey
+            weeklyAnswers = 0
+            weeklyRewardClaimed = false
+            prefs.edit()
+                .putString("weeklyChallengeKey", currentWeekKey)
+                .putInt("weeklyAnswers", 0)
+                .putBoolean("weeklyRewardClaimed", false)
+                .apply()
+        }
+    }
     var quickQuestion by remember { mutableStateOf<Question?>(null) }
     var quickAnswered by remember { mutableStateOf(false) }
     var quickSelected by rememberSaveable { mutableIntStateOf(-1) }
 
-    val levelXp = (correct * 100 + quizScore).coerceAtLeast(0) % 1000
+    val levelXp = experienceXp % 1000
     val levelXpProgress = levelXp / 1000f
 
     fun saveProgress() {
@@ -279,6 +287,12 @@ private fun StudyMateApp(lightTheme: Boolean, onToggleLightTheme: () -> Unit) {
             .putInt("correct", correct)
             .putInt("coins", coins)
             .putInt("xp", coins)
+            .putInt("experienceXp", experienceXp)
+            .putString("weeklyChallengeKey", weeklyChallengeKey)
+            .putInt("weeklyAnswers", weeklyAnswers)
+            .putBoolean("weeklyRewardClaimed", weeklyRewardClaimed)
+            .putString("friendNames", encodeStrings(friendNames))
+            .putBoolean("activeExamMode", examMode)
             .putInt("dailyStreak", dailyStreak)
             .putInt("item_5050", fiftyFiftyItems)
             .putInt("item_time", extraTimeItems)
@@ -335,9 +349,22 @@ private fun StudyMateApp(lightTheme: Boolean, onToggleLightTheme: () -> Unit) {
         if (quickAnswered) return
         quickSelected = index
         quickAnswered = true
+        val todayWeek = LocalDate.now().with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY)).toString()
+        if (weeklyChallengeKey != todayWeek) {
+            weeklyChallengeKey = todayWeek
+            weeklyAnswers = 0
+            weeklyRewardClaimed = false
+        }
+        weeklyAnswers++
+        if (weeklyAnswers >= 25 && !weeklyRewardClaimed) {
+            coins += 100
+            weeklyRewardClaimed = true
+            android.widget.Toast.makeText(context, "Weekly challenge complete! +100 coins 🎉", android.widget.Toast.LENGTH_LONG).show()
+        }
         val isCorrect = index == q.answer
         if (isCorrect) {
             if (tickingSound) runCatching { toneGenerator.startTone(ToneGenerator.TONE_PROP_ACK, 120) }
+            experienceXp += 10
             correct++
             answered++
             coins += 10
@@ -347,7 +374,11 @@ private fun StudyMateApp(lightTheme: Boolean, onToggleLightTheme: () -> Unit) {
             saveProgress()
             android.widget.Toast.makeText(context, "Correct! +10 coins 🪙", android.widget.Toast.LENGTH_SHORT).show()
         } else {
-            android.widget.Toast.makeText(context, "Not quite. Try the full quiz for more practice.", android.widget.Toast.LENGTH_SHORT).show()
+            answered++
+            history.add(0, ReviewItem(q, index, false, level))
+            while (history.size > 500) history.removeAt(history.lastIndex)
+            saveProgress()
+            android.widget.Toast.makeText(context, "Not quite. Saved to Review Wrong Answers.", android.widget.Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -386,6 +417,7 @@ private fun StudyMateApp(lightTheme: Boolean, onToggleLightTheme: () -> Unit) {
     }
 
     fun startQuiz(subject: String, daily: Boolean = false) {
+        examMode = false
         quizPaused = false
         selectedSubject = subject
         level = subjectLevels.getOrPut(subject) {
@@ -421,7 +453,66 @@ private fun StudyMateApp(lightTheme: Boolean, onToggleLightTheme: () -> Unit) {
         screen = Screen.QUIZ.name
     }
 
+    fun startExamMode() {
+        examMode = true
+        quizPaused = false
+        selectedSubject = "Mixed"
+        questionIndex = 0
+        selectedAnswer = -1
+        revealed = false
+        secondsLeft = 60
+        lives = 3
+        streak = 0
+        quizCorrect = 0
+        quizScore = 0
+        used5050 = false
+        usedTimeFreeze = false
+        usedSkip = false
+        free5050 = false
+        freeTime = false
+        freeSkip = false
+        hiddenChoices = emptySet()
+        quizResultSaved = false
+        quizStartedAt = System.currentTimeMillis()
+        dailyChallengeActive = false
+        val pool = (makeQuestions("Mixed", level) + importedQuestions).distinctBy { it.id }
+        questions = pool.shuffled().take(20)
+        saveProgress()
+        screen = Screen.QUIZ.name
+    }
+
+    fun retryWrongAnswers() {
+        val wrongQuestions = history.filter { !it.correct }.distinctBy { it.question.id }.map { it.question }
+        if (wrongQuestions.isEmpty()) {
+            android.widget.Toast.makeText(context, "Wala pang maling sagot na ire-review.", android.widget.Toast.LENGTH_SHORT).show()
+            return
+        }
+        examMode = false
+        questions = wrongQuestions.shuffled()
+        questionIndex = 0
+        selectedAnswer = -1
+        revealed = false
+        secondsLeft = 30
+        lives = 3
+        streak = 0
+        quizCorrect = 0
+        quizScore = 0
+        used5050 = false
+        usedTimeFreeze = false
+        usedSkip = false
+        free5050 = true
+        freeTime = true
+        freeSkip = true
+        hiddenChoices = emptySet()
+        quizResultSaved = false
+        quizStartedAt = System.currentTimeMillis()
+        quizPaused = false
+        saveProgress()
+        screen = Screen.QUIZ.name
+    }
+
     fun retryCurrentQuiz() {
+        examMode = false
         quizPaused = false
         questionIndex = 0
         selectedAnswer = -1
@@ -469,6 +560,7 @@ private fun StudyMateApp(lightTheme: Boolean, onToggleLightTheme: () -> Unit) {
         answered++
         if (isCorrect) {
             correct++
+            experienceXp += 10
             quizCorrect++
             streak++
             val speedBonus = (secondsLeft * 2).coerceAtLeast(0)
@@ -483,6 +575,19 @@ private fun StudyMateApp(lightTheme: Boolean, onToggleLightTheme: () -> Unit) {
         answeredIds.add(q.id)
         history.add(0, ReviewItem(q, selectedAnswer, isCorrect, level))
         while (history.size > 500) history.removeAt(history.lastIndex)
+        val todayForMission = LocalDate.now().toString()
+        val thisWeek = LocalDate.now().with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY)).toString()
+        if (weeklyChallengeKey != thisWeek) {
+            weeklyChallengeKey = thisWeek
+            weeklyAnswers = 0
+            weeklyRewardClaimed = false
+        }
+        weeklyAnswers++
+        if (weeklyAnswers >= 25 && !weeklyRewardClaimed) {
+            coins += 100
+            weeklyRewardClaimed = true
+            android.widget.Toast.makeText(context, "Weekly challenge complete! +100 coins 🎉", android.widget.Toast.LENGTH_LONG).show()
+        }
         val todayForMission = LocalDate.now().toString()
         if (missionDate != todayForMission) {
             missionDate = todayForMission
@@ -648,6 +753,26 @@ private fun StudyMateApp(lightTheme: Boolean, onToggleLightTheme: () -> Unit) {
                         ) {}
 
                         CardBox("📴 Offline Ready", "Core quizzes, notes, flashcards, progress, coins, and shop inventory are stored on this device. Online sync is not configured yet.") {}
+                        CardBox(
+                            "🗓️ Weekly Challenge • ${weeklyAnswers.coerceAtMost(25)}/25 answers",
+                            if (weeklyRewardClaimed) "Completed! You earned +100 bonus coins this week." else "Answer 25 questions this week to earn +100 bonus coins."
+                        ) {}
+                        CardBox("⭐ Experience Points", "$experienceXp XP • ${1000 - levelXp} XP to next XP milestone") {}
+
+                        NeonActionCard(
+                            title = "📝 Exam Mode",
+                            subtitle = "20 mixed questions • 60 seconds each • 3 lives • no free power-ups",
+                            badge = "EXAM",
+                            accent = Color(0xFF22D3EE),
+                            onClick = { startExamMode() }
+                        )
+                        NeonActionCard(
+                            title = "Review Wrong Answers",
+                            subtitle = "Retry ${history.count { !it.correct }} saved incorrect answers",
+                            badge = "PRACTICE",
+                            accent = Color(0xFF818CF8),
+                            onClick = { screen = Screen.REVIEW.name }
+                        )
 
                         NeonActionCard(
                             title = "Quick Quiz",
@@ -778,6 +903,9 @@ private fun StudyMateApp(lightTheme: Boolean, onToggleLightTheme: () -> Unit) {
                         CardBox("📝 Total Answered", "$answered questions") {}
                         CardBox("✅ Correct Answers", "$correct correct") {}
                         CardBox("🔥 Current Streak", "$dailyStreak days") {}
+                        CardBox("⭐ Total XP", "$experienceXp XP • Level $level") {}
+                        CardBox("🧠 Wrong Answers to Review", "${history.count { !it.correct }} saved incorrect answers") { screen = Screen.REVIEW.name }
+                        CardBox("🗓️ Weekly Challenge", "${weeklyAnswers.coerceAtMost(25)}/25 answers • ${if (weeklyRewardClaimed) "Reward claimed" else "+100 coins at 25"}") {}
                         CardBox("🏆 Local Leaderboard", if (localLeaderboard.isEmpty()) "No records yet." else localLeaderboard.take(10).mapIndexed { index, row ->
                             val parts = row.split("|")
                             val player = parts.getOrNull(3).orEmpty().ifBlank { "Student" }
@@ -785,6 +913,44 @@ private fun StudyMateApp(lightTheme: Boolean, onToggleLightTheme: () -> Unit) {
                             val right = parts.getOrNull(1).orEmpty()
                             "${index + 1}. $player • $score pts • $right correct"
                         }.joinToString("\n")) {}
+                        Heading("👥 Friends Leaderboard", "Local friend list on this device. Online score sync is not configured.")
+                        OutlinedTextField(
+                            value = friendInput,
+                            onValueChange = { friendInput = it },
+                            label = { Text("Friend name") },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true
+                        )
+                        Button(
+                            onClick = {
+                                val friend = friendInput.trim()
+                                if (friend.isNotBlank() && friendNames.none { it.equals(friend, ignoreCase = true) }) {
+                                    friendNames.add(friend)
+                                    prefs.edit().putString("friendNames", encodeStrings(friendNames)).apply()
+                                }
+                                friendInput = ""
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) { Text("Add Friend") }
+                        val friendRows = (listOf("${studentName.ifBlank { "You" }} • $quizScore points") + friendNames.map { "$it • score not synced" })
+                        friendRows.forEachIndexed { index, row -> CardBox("${index + 1}. $row", if (index == 0) "This device's latest quiz score" else "Add online sync later to compare real scores") {} }
+                    }
+
+                    Screen.REVIEW -> {
+                        Heading("🧠 Review Wrong Answers", "Revisit missed questions, explanations, and retry them in a practice quiz.")
+                        val wrongItems = history.filter { !it.correct }.distinctBy { it.question.id }
+                        if (wrongItems.isEmpty()) {
+                            CardBox("All caught up!", "Wala pang maling sagot. Maglaro muna ng quiz para makapagdagdag ng review items.") {}
+                        } else {
+                            wrongItems.forEachIndexed { index, item ->
+                                CardBox(
+                                    "${index + 1}. ${item.question.subject} • Missed",
+                                    "${item.question.text}\n\nYour answer: ${item.question.choices.getOrNull(item.selected) ?: "No answer / timeout"}\nCorrect answer: ${item.question.choices.getOrNull(item.question.answer) ?: "Unavailable"}\nExplanation: ${item.question.explanation}"
+                                ) {}
+                            }
+                            Button(onClick = { retryWrongAnswers() }, modifier = Modifier.fillMaxWidth()) { Text("🔁 Retry Wrong Answers") }
+                        }
+                        OutlinedButton(onClick = { screen = Screen.PROGRESS.name }, modifier = Modifier.fillMaxWidth()) { Text("Back to Statistics") }
                     }
 
                     Screen.SEARCH -> {
@@ -826,10 +992,9 @@ private fun StudyMateApp(lightTheme: Boolean, onToggleLightTheme: () -> Unit) {
                             fiftyFifty = fiftyFiftyItems,
                             extraTime = extraTimeItems,
                             skip = skipItems,
-                            lightTheme = lightTheme,
+                            experienceXp = experienceXp,
                             tickingSound = tickingSound,
                             importMessage = importMessage,
-                            onToggleLightTheme = onToggleLightTheme,
                             onToggleTicking = {
                                 tickingSound = !tickingSound
                                 prefs.edit().putBoolean("tickingSound", tickingSound).apply()
@@ -860,7 +1025,7 @@ private fun StudyMateApp(lightTheme: Boolean, onToggleLightTheme: () -> Unit) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Text("Question ${questionIndex + 1}/${questions.size}", fontWeight = FontWeight.Bold, color = purple)
                                     Spacer(Modifier.weight(1f))
-                                    Text("❤️ $lives", color = Color(0xFFF43F5E), fontWeight = FontWeight.Bold)
+                                    Text(if (examMode) "📝 EXAM • ❤️ $lives" else "❤️ $lives", color = Color(0xFFF43F5E), fontWeight = FontWeight.Bold)
                                 }
                                 Card(
                                     colors = CardDefaults.cardColors(containerColor = if (secondsLeft <= 10) Color(0xFF7F1D1D) else panel),
@@ -868,13 +1033,13 @@ private fun StudyMateApp(lightTheme: Boolean, onToggleLightTheme: () -> Unit) {
                                 ) {
                                     Column(Modifier.padding(12.dp)) {
                                         Text(
-                                            if (secondsLeft <= 10) "🚨 RED ZONE!  HURRY!" else "⏱ Time remaining",
+                                            if (examMode) "📝 EXAM TIMER" else if (secondsLeft <= 10) "🚨 RED ZONE!  HURRY!" else "⏱ Time remaining",
                                             color = if (secondsLeft <= 10) Color(0xFFFF6B6B) else muted,
                                             fontWeight = FontWeight.Bold
                                         )
                                         Text("$secondsLeft seconds", color = if (secondsLeft <= 10) Color.White else purple, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.ExtraBold)
                                         LinearProgressIndicator(
-                                            progress = { secondsLeft / 30f },
+                                            progress = { secondsLeft / (if (examMode) 60f else 30f) },
                                             modifier = Modifier.fillMaxWidth(),
                                             color = if (secondsLeft <= 10) Color(0xFFF43F5E) else purple
                                         )
@@ -882,24 +1047,24 @@ private fun StudyMateApp(lightTheme: Boolean, onToggleLightTheme: () -> Unit) {
                                 }
                                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                                     OutlinedButton(onClick = {
-                                        if (!revealed && (free5050 || fiftyFiftyItems > 0)) {
+                                        if (!examMode && !revealed && (free5050 || fiftyFiftyItems > 0)) {
                                             val wrong = q.choices.indices.filter { it != q.answer && it !in hiddenChoices }.shuffled().take(2).toSet()
                                             hiddenChoices = hiddenChoices + wrong
                                             used5050 = true
                                             if (!free5050 && fiftyFiftyItems > 0) fiftyFiftyItems-- else free5050 = false
                                             saveProgress()
                                         }
-                                    }, enabled = !revealed && (free5050 || fiftyFiftyItems > 0), modifier = Modifier.weight(1f)) { Text(if (free5050) "🎯 50:50 FREE" else "🎯 50:50 ($fiftyFiftyItems)") }
+                                    }, enabled = !examMode && !revealed && (free5050 || fiftyFiftyItems > 0), modifier = Modifier.weight(1f)) { Text(if (examMode) "🎯 50:50 OFF" else if (free5050) "🎯 50:50 FREE" else "🎯 50:50 ($fiftyFiftyItems)") }
                                     OutlinedButton(onClick = {
-                                        if (!revealed && (freeTime || extraTimeItems > 0)) {
+                                        if (!examMode && !revealed && (freeTime || extraTimeItems > 0)) {
                                             secondsLeft += 15
                                             usedTimeFreeze = true
                                             if (!freeTime && extraTimeItems > 0) extraTimeItems-- else freeTime = false
                                             saveProgress()
                                         }
-                                    }, enabled = !revealed && (freeTime || extraTimeItems > 0), modifier = Modifier.weight(1f)) { Text(if (freeTime) "⏱ +15 sec FREE" else "⏱ +15 sec ($extraTimeItems)") }
+                                    }, enabled = !examMode && !revealed && (freeTime || extraTimeItems > 0), modifier = Modifier.weight(1f)) { Text(if (examMode) "⏱ TIME FIXED" else if (freeTime) "⏱ +15 sec FREE" else "⏱ +15 sec ($extraTimeItems)") }
                                     OutlinedButton(onClick = {
-                                        if (!revealed && (freeSkip || skipItems > 0)) {
+                                        if (!examMode && !revealed && (freeSkip || skipItems > 0)) {
                                             usedSkip = true
                                             if (!freeSkip && skipItems > 0) skipItems-- else freeSkip = false
                                             saveProgress()
@@ -908,11 +1073,11 @@ private fun StudyMateApp(lightTheme: Boolean, onToggleLightTheme: () -> Unit) {
                                             revealed = false
                                             if (questionIndex + 1 < questions.size) {
                                                 questionIndex++
-                                                secondsLeft = 30
+                                                secondsLeft = if (examMode) 60 else 30
                                                 saveProgress()
                                             } else finishQuiz()
                                         }
-                                    }, enabled = !revealed && (freeSkip || skipItems > 0), modifier = Modifier.weight(1f)) { Text(if (freeSkip) "⏭ Skip FREE" else "⏭ Skip ($skipItems)") }
+                                    }, enabled = !examMode && !revealed && (freeSkip || skipItems > 0), modifier = Modifier.weight(1f)) { Text(if (examMode) "⏭ SKIP OFF" else if (freeSkip) "⏭ Skip FREE" else "⏭ Skip ($skipItems)") }
                                 }
                                 Text(q.text, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
 
@@ -947,7 +1112,7 @@ private fun StudyMateApp(lightTheme: Boolean, onToggleLightTheme: () -> Unit) {
                                             hiddenChoices = emptySet()
                                             if (questionIndex + 1 < questions.size && lives > 0) {
                                                 questionIndex++
-                                                secondsLeft = 30
+                                                secondsLeft = if (examMode) 60 else 30
                                                 saveProgress()
                                             } else {
                                                 finishQuiz()
@@ -1372,10 +1537,9 @@ private fun ProfilePage(
     fiftyFifty: Int,
     extraTime: Int,
     skip: Int,
-    lightTheme: Boolean,
+    experienceXp: Int,
     tickingSound: Boolean,
     importMessage: String,
-    onToggleLightTheme: () -> Unit,
     onToggleTicking: () -> Unit,
     onImport: () -> Unit,
     onSave: (String, String) -> Unit,
@@ -1386,17 +1550,23 @@ private fun ProfilePage(
 
     Heading("$avatar Student Profile", "Customize your profile and learning summary.")
     Text("Choose your avatar", fontWeight = FontWeight.SemiBold)
-    Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
-        listOf("🎓", "🦊", "🐼", "🚀", "🌟", "📚").forEach { icon ->
-            Surface(
-                modifier = Modifier.weight(1f).clickable { onAvatarChange(icon) },
-                shape = RoundedCornerShape(14.dp),
-                color = if (avatar == icon) MaterialTheme.colorScheme.primary.copy(alpha = 0.22f) else MaterialTheme.colorScheme.surface,
-                border = if (avatar == icon) androidx.compose.foundation.BorderStroke(2.dp, MaterialTheme.colorScheme.primary) else null
-            ) {
-                Text(icon, modifier = Modifier.padding(vertical = 10.dp), textAlign = androidx.compose.ui.text.style.TextAlign.Center, style = MaterialTheme.typography.titleLarge)
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+        listOf("🎓", "🦊", "🐼", "🚀", "🌟", "📚", "🐯", "🐸", "🦄", "⚡", "🎧", "🧠")
+            .chunked(6)
+            .forEach { avatarRow ->
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                    avatarRow.forEach { icon ->
+                        Surface(
+                            modifier = Modifier.weight(1f).clickable { onAvatarChange(icon) },
+                            shape = RoundedCornerShape(14.dp),
+                            color = if (avatar == icon) MaterialTheme.colorScheme.primary.copy(alpha = 0.22f) else MaterialTheme.colorScheme.surface,
+                            border = if (avatar == icon) androidx.compose.foundation.BorderStroke(2.dp, MaterialTheme.colorScheme.primary) else null
+                        ) {
+                            Text(icon, modifier = Modifier.padding(vertical = 10.dp), textAlign = androidx.compose.ui.text.style.TextAlign.Center, style = MaterialTheme.typography.titleLarge)
+                        }
+                    }
+                }
             }
-        }
     }
 
     OutlinedTextField(
@@ -1423,6 +1593,7 @@ private fun ProfilePage(
     }
 
     CardBox("📚 Level", "$level / 100") {}
+    CardBox("⭐ Experience", "$experienceXp XP") {}
     CardBox("🪙 Coins", "$coins coins") {}
     CardBox("🛒 Coin Shop Inventory", "50:50: $fiftyFifty • +15 sec: $extraTime • Skip: $skip") {}
     CardBox("🔥 Daily streak", "$dailyStreak day(s)") {}
@@ -1451,16 +1622,7 @@ private fun ProfilePage(
 
     Heading("⚙️ Settings", "App preferences are now inside your Profile.")
 
-    Row(
-        modifier = Modifier.fillMaxWidth().clickable { onToggleLightTheme() }.padding(vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Column(Modifier.weight(1f)) {
-            Text("Light Theme", fontWeight = FontWeight.SemiBold)
-            Text("Switch between light and neon dark appearance.", color = muted, style = MaterialTheme.typography.bodySmall)
-        }
-        Switch(checked = lightTheme, onCheckedChange = { onToggleLightTheme() })
-    }
+    CardBox("🧊 Cool Theme", "StudyMate PH now uses one consistent cool blue, cyan, and indigo theme. Theme switching has been removed.") {}
 
     Row(
         modifier = Modifier.fillMaxWidth().clickable { onToggleTicking() }.padding(vertical = 10.dp),
