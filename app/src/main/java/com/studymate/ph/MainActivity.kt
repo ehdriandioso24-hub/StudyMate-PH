@@ -68,10 +68,10 @@ private data class BankItem(
     val type: String = "Multiple Choice"
 )
 
-private val bg = Color(0xFF071521)
-private val panel = Color(0xFF10283A)
-private val purple = Color(0xFF22D3EE)
-private val pink = Color(0xFF818CF8)
+private val bg = Color(0xFF080D1A)
+private val panel = Color(0xFF111827)
+private val purple = Color(0xFF8B5CF6)
+private val pink = Color(0xFF06B6D4)
 private val muted = Color(0xFFA7C4D4)
 
 class MainActivity : ComponentActivity() {
@@ -81,14 +81,14 @@ class MainActivity : ComponentActivity() {
         val appPrefs = getSharedPreferences("studymate_data", Context.MODE_PRIVATE)
         setContent {
             val appColors = darkColorScheme(
-                primary = Color(0xFF22D3EE),
-                secondary = Color(0xFF818CF8),
+                primary = Color(0xFF8B5CF6),
+                secondary = Color(0xFF06B6D4),
                 tertiary = Color(0xFF34D399),
-                background = Color(0xFF071521),
-                surface = Color(0xFF10283A),
-                onPrimary = Color(0xFF04202A),
-                onBackground = Color(0xFFE6F7FF),
-                onSurface = Color(0xFFE6F7FF)
+                background = Color(0xFF080D1A),
+                surface = Color(0xFF111827),
+                onPrimary = Color(0xFFFFFFFF),
+                onBackground = Color(0xFFF3F4F6),
+                onSurface = Color(0xFFF3F4F6)
             )
             MaterialTheme(
                 colorScheme = appColors,
@@ -104,7 +104,21 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = appColors.background
                 ) {
-                    StudyMateApp()
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(
+                                Brush.verticalGradient(
+                                    colors = listOf(
+                                        Color(0xFF17143A),
+                                        Color(0xFF080D1A),
+                                        Color(0xFF030712)
+                                    )
+                                )
+                            )
+                    ) {
+                        StudyMateApp()
+                    }
                 }
             }
         }
@@ -1834,7 +1848,7 @@ private fun GlassTopBar(
             Spacer(Modifier.width(8.dp))
         }
         Column(Modifier.weight(1f)) {
-            Text("StudyMate PH", color = Color(0xFFC084FC), fontWeight = FontWeight.ExtraBold)
+            Text("StudyMate PH", color = Color(0xFFA78BFA), fontWeight = FontWeight.ExtraBold)
             Text("Level $level • Learn smarter, one day at a time", color = muted, style = MaterialTheme.typography.bodySmall)
         }
         Surface(
@@ -1876,8 +1890,8 @@ private fun GlassBottomNav(
                 Surface(
                     modifier = Modifier.weight(1f).clickable { onNavigate(item) },
                     shape = MaterialTheme.shapes.large,
-                    color = if (selected) Color(0xFF7C3AED).copy(alpha = 0.28f) else Color.Transparent,
-                    border = if (selected) androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFA78BFA).copy(alpha = 0.35f)) else null
+                    color = if (selected) Color(0xFF8B5CF6).copy(alpha = 0.22f) else Color.Transparent,
+                    border = if (selected) androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF8B5CF6).copy(alpha = 0.42f)) else null
                 ) {
                     Column(
                         Modifier.padding(vertical = 8.dp),
