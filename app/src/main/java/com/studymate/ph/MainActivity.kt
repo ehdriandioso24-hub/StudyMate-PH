@@ -76,17 +76,28 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        val appPrefs = getSharedPreferences("studymate_data", Context.MODE_PRIVATE)
         setContent {
+            var lightTheme by remember { mutableStateOf(appPrefs.getBoolean("lightTheme", false)) }
+            val appColors = if (lightTheme) lightColorScheme(
+                primary = Color(0xFF6D28D9),
+                secondary = Color(0xFFBE185D),
+                background = Color(0xFFF7F7FB),
+                surface = Color.White,
+                onPrimary = Color.White,
+                onBackground = Color(0xFF171725),
+                onSurface = Color(0xFF171725)
+            ) else darkColorScheme(
+                primary = purple,
+                secondary = pink,
+                background = bg,
+                surface = panel,
+                onPrimary = Color(0xFF160D28),
+                onBackground = Color(0xFFF5F3FF),
+                onSurface = Color(0xFFF5F3FF)
+            )
             MaterialTheme(
-                colorScheme = darkColorScheme(
-                    primary = purple,
-                    secondary = pink,
-                    background = bg,
-                    surface = panel,
-                    onPrimary = Color(0xFF160D28),
-                    onBackground = Color(0xFFF5F3FF),
-                    onSurface = Color(0xFFF5F3FF)
-                ),
+                colorScheme = appColors,
                 shapes = Shapes(
                     extraSmall = RoundedCornerShape(8.dp),
                     small = RoundedCornerShape(12.dp),
@@ -97,9 +108,15 @@ class MainActivity : ComponentActivity() {
             ) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
-                    color = bg
+                    color = appColors.background
                 ) {
-                    StudyMateApp()
+                    StudyMateApp(
+                        lightTheme = lightTheme,
+                        onToggleLightTheme = {
+                            lightTheme = !lightTheme
+                            appPrefs.edit().putBoolean("lightTheme", lightTheme).apply()
+                        }
+                    )
                 }
             }
         }
@@ -107,7 +124,7 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-private fun StudyMateApp() {
+private fun StudyMateApp(lightTheme: Boolean, onToggleLightTheme: () -> Unit) {
     val context = LocalContext.current
 
     val prefs = remember {
@@ -121,7 +138,7 @@ private fun StudyMateApp() {
     val subjectLevels = remember {
         mutableStateMapOf<String, Int>().apply {
             listOf("Mixed", "Math", "Science", "English", "Filipino",
-                "Araling Panlipunan", "ICT", "PE & Health").forEach { subject ->
+                "Araling Panlipunan", "ICT", "PE & Health", "Study Skills").forEach { subject ->
                 put(
                     subject,
                     prefs.getInt("level_$subject", prefs.getInt("level", 1)).coerceIn(1, 100)
@@ -153,10 +170,7 @@ private fun StudyMateApp() {
     var fiftyFiftyItems by remember { mutableIntStateOf(prefs.getInt("item_5050", 0).coerceAtLeast(0)) }
     var extraTimeItems by remember { mutableIntStateOf(prefs.getInt("item_time", 0).coerceAtLeast(0)) }
     var skipItems by remember { mutableIntStateOf(prefs.getInt("item_skip", 0).coerceAtLeast(0)) }
-    var selectedSubject by rememberSaveable { mutableStateOf("Mixed") }
-    var lightTheme by remember {
-        mutableStateOf(prefs.getBoolean("lightTheme", false))
-    }
+    var selectedSubject by rememberSaveable { mutableStateOf(prefs.getString("activeSelectedSubject", "Mixed") ?: "Mixed") }
     var tickingSound by remember { mutableStateOf(prefs.getBoolean("tickingSound", true)) }
     val toneGenerator = remember { ToneGenerator(AudioManager.STREAM_MUSIC, 55) }
     DisposableEffect(Unit) { onDispose { toneGenerator.release() } }
@@ -170,6 +184,9 @@ private fun StudyMateApp() {
     }
     var studentEmail by remember {
         mutableStateOf(prefs.getString("studentEmail", "") ?: "")
+    }
+    var profileAvatar by remember {
+        mutableStateOf(prefs.getString("profileAvatar", "🎓") ?: "🎓")
     }
     var searchQuery by rememberSaveable { mutableStateOf("") }
     var importMessage by rememberSaveable { mutableStateOf("") }
@@ -204,26 +221,31 @@ private fun StudyMateApp() {
         }
     }
 
-    var questions by remember { mutableStateOf(emptyList<Question>()) }
-    var questionIndex by rememberSaveable { mutableIntStateOf(0) }
+    var questions by remember {
+        mutableStateOf(decodeQuestions(prefs.getString("activeQuizQuestions", "[]") ?: "[]"))
+    }
+    var questionIndex by rememberSaveable { mutableIntStateOf(prefs.getInt("activeQuestionIndex", 0).coerceAtLeast(0)) }
     var levelUpFrom by rememberSaveable { mutableIntStateOf(1) }
-    var selectedAnswer by rememberSaveable { mutableIntStateOf(-1) }
-    var revealed by rememberSaveable { mutableStateOf(false) }
-    var secondsLeft by rememberSaveable { mutableIntStateOf(30) }
-    var lives by rememberSaveable { mutableIntStateOf(3) }
-    var streak by rememberSaveable { mutableIntStateOf(0) }
-    var quizCorrect by rememberSaveable { mutableIntStateOf(0) }
-    var quizScore by rememberSaveable { mutableIntStateOf(0) }
-    var used5050 by rememberSaveable { mutableStateOf(false) }
-    var usedTimeFreeze by rememberSaveable { mutableStateOf(false) }
-    var usedSkip by rememberSaveable { mutableStateOf(false) }
-    var free5050 by rememberSaveable { mutableStateOf(false) }
-    var freeTime by rememberSaveable { mutableStateOf(false) }
-    var freeSkip by rememberSaveable { mutableStateOf(false) }
-    var hiddenChoices by remember { mutableStateOf(setOf<Int>()) }
+    var selectedAnswer by rememberSaveable { mutableIntStateOf(prefs.getInt("activeSelectedAnswer", -1)) }
+    var revealed by rememberSaveable { mutableStateOf(prefs.getBoolean("activeRevealed", false)) }
+    var secondsLeft by rememberSaveable { mutableIntStateOf(prefs.getInt("activeSecondsLeft", 30).coerceIn(0, 45)) }
+    var lives by rememberSaveable { mutableIntStateOf(prefs.getInt("activeLives", 3).coerceIn(0, 3)) }
+    var streak by rememberSaveable { mutableIntStateOf(prefs.getInt("activeStreak", 0).coerceAtLeast(0)) }
+    var quizCorrect by rememberSaveable { mutableIntStateOf(prefs.getInt("activeQuizCorrect", 0).coerceAtLeast(0)) }
+    var quizScore by rememberSaveable { mutableIntStateOf(prefs.getInt("activeQuizScore", 0).coerceAtLeast(0)) }
+    var used5050 by rememberSaveable { mutableStateOf(prefs.getBoolean("activeUsed5050", false)) }
+    var usedTimeFreeze by rememberSaveable { mutableStateOf(prefs.getBoolean("activeUsedTime", false)) }
+    var usedSkip by rememberSaveable { mutableStateOf(prefs.getBoolean("activeUsedSkip", false)) }
+    var free5050 by rememberSaveable { mutableStateOf(prefs.getBoolean("activeFree5050", false)) }
+    var freeTime by rememberSaveable { mutableStateOf(prefs.getBoolean("activeFreeTime", false)) }
+    var freeSkip by rememberSaveable { mutableStateOf(prefs.getBoolean("activeFreeSkip", false)) }
+    var hiddenChoices by remember { mutableStateOf((prefs.getString("activeHiddenChoices", "") ?: "").split(",").mapNotNull { it.toIntOrNull() }.toSet()) }
     var quizResultSaved by rememberSaveable { mutableStateOf(false) }
-    var quizStartedAt by rememberSaveable { mutableLongStateOf(System.currentTimeMillis()) }
-    var dailyChallengeActive by rememberSaveable { mutableStateOf(false) }
+    var quizStartedAt by rememberSaveable { mutableLongStateOf(prefs.getLong("activeQuizStartedAt", System.currentTimeMillis())) }
+    var dailyChallengeActive by rememberSaveable { mutableStateOf(prefs.getBoolean("activeDailyChallenge", false)) }
+    var missionDate by remember { mutableStateOf(prefs.getString("missionDate", "") ?: "") }
+    var missionAnswers by remember { mutableIntStateOf(prefs.getInt("missionAnswers", 0).coerceAtLeast(0)) }
+    var missionRewardClaimed by remember { mutableStateOf(prefs.getBoolean("missionRewardClaimed", false)) }
     val localLeaderboard = remember {
         mutableStateListOf<String>().apply {
             addAll((prefs.getString("localLeaderboard", "") ?: "").split("\n").filter { it.isNotBlank() })
@@ -234,7 +256,7 @@ private fun StudyMateApp() {
     var showQuickQuizModal by remember { mutableStateOf(false) }
     var showCoinShopModal by remember { mutableStateOf(false) }
     var showCoinBurst by remember { mutableStateOf(false) }
-    var quizPaused by rememberSaveable { mutableStateOf(false) }
+    var quizPaused by rememberSaveable { mutableStateOf(prefs.getBoolean("activeQuiz", false) && questions.isNotEmpty()) }
     LaunchedEffect(showCoinBurst) {
         if (showCoinBurst) {
             delay(1800)
@@ -270,7 +292,31 @@ private fun StudyMateApp() {
             .putString("importedQuestions", encodeQuestions(importedQuestions))
             .putString("studentName", studentName)
             .putString("studentEmail", studentEmail)
+            .putString("profileAvatar", profileAvatar)
             .putBoolean("loggedIn", loggedIn)
+            .putString("missionDate", missionDate)
+            .putInt("missionAnswers", missionAnswers)
+            .putBoolean("missionRewardClaimed", missionRewardClaimed)
+            .putString("activeQuizQuestions", encodeQuestions(questions))
+            .putInt("activeQuestionIndex", questionIndex)
+            .putInt("activeSelectedAnswer", selectedAnswer)
+            .putBoolean("activeRevealed", revealed)
+            .putInt("activeSecondsLeft", secondsLeft)
+            .putInt("activeLives", lives)
+            .putInt("activeStreak", streak)
+            .putInt("activeQuizCorrect", quizCorrect)
+            .putInt("activeQuizScore", quizScore)
+            .putLong("activeQuizStartedAt", quizStartedAt)
+            .putString("activeSelectedSubject", selectedSubject)
+            .putBoolean("activeUsed5050", used5050)
+            .putBoolean("activeUsedTime", usedTimeFreeze)
+            .putBoolean("activeUsedSkip", usedSkip)
+            .putBoolean("activeFree5050", free5050)
+            .putBoolean("activeFreeTime", freeTime)
+            .putBoolean("activeFreeSkip", freeSkip)
+            .putString("activeHiddenChoices", hiddenChoices.joinToString(","))
+            .putBoolean("activeDailyChallenge", dailyChallengeActive)
+            .putBoolean("activeQuiz", questions.isNotEmpty() && !quizResultSaved)
             .apply()
     }
 
@@ -291,6 +337,7 @@ private fun StudyMateApp() {
         quickAnswered = true
         val isCorrect = index == q.answer
         if (isCorrect) {
+            if (tickingSound) runCatching { toneGenerator.startTone(ToneGenerator.TONE_PROP_ACK, 120) }
             correct++
             answered++
             coins += 10
@@ -369,7 +416,8 @@ private fun StudyMateApp() {
         }
         val pool = (builtIn + imported).distinctBy { it.id }
         questions = pool.filter { it.id !in answeredIds }.shuffled().take(if (daily) 10 else 20)
-
+        saveProgress()
+        quizPaused = false
         screen = Screen.QUIZ.name
     }
 
@@ -393,6 +441,7 @@ private fun StudyMateApp() {
         quizResultSaved = false
         quizStartedAt = System.currentTimeMillis()
         questions = questions.shuffled()
+        saveProgress()
         screen = Screen.QUIZ.name
     }
 
@@ -405,7 +454,10 @@ private fun StudyMateApp() {
         val sorted = localLeaderboard.sortedByDescending { it.substringBefore('|').toIntOrNull() ?: 0 }.take(10)
         localLeaderboard.clear()
         localLeaderboard.addAll(sorted)
-        prefs.edit().putString("localLeaderboard", localLeaderboard.joinToString("\n")).apply()
+        prefs.edit()
+            .putString("localLeaderboard", localLeaderboard.joinToString("\n"))
+            .putBoolean("activeQuiz", false)
+            .apply()
     }
 
     fun recordAnswer(index: Int, timedOut: Boolean = false) {
@@ -424,12 +476,25 @@ private fun StudyMateApp() {
             quizScore += 100 + speedBonus + comboBonus
             coins += 10
         } else {
+            if (tickingSound) runCatching { toneGenerator.startTone(ToneGenerator.TONE_PROP_NACK, 160) }
             lives = (lives - 1).coerceAtLeast(0)
             streak = 0
         }
         answeredIds.add(q.id)
         history.add(0, ReviewItem(q, selectedAnswer, isCorrect, level))
         while (history.size > 500) history.removeAt(history.lastIndex)
+        val todayForMission = LocalDate.now().toString()
+        if (missionDate != todayForMission) {
+            missionDate = todayForMission
+            missionAnswers = 0
+            missionRewardClaimed = false
+        }
+        missionAnswers++
+        if (missionAnswers >= 5 && !missionRewardClaimed) {
+            coins += 30
+            missionRewardClaimed = true
+            android.widget.Toast.makeText(context, "Daily mission complete! +30 bonus coins 🎁", android.widget.Toast.LENGTH_LONG).show()
+        }
         saveProgress()
         if (lives <= 0) {
             quizPaused = false
@@ -479,6 +544,7 @@ private fun StudyMateApp() {
     BackHandler(enabled = currentScreen != Screen.HOME) {
         if (currentScreen == Screen.QUIZ && !quizResultSaved) {
             quizPaused = true
+            saveProgress()
         }
         screen = Screen.HOME.name
     }
@@ -491,6 +557,7 @@ private fun StudyMateApp() {
             } else {
                 delay(1000)
                 secondsLeft = (secondsLeft - 1).coerceAtLeast(0)
+                prefs.edit().putInt("activeSecondsLeft", secondsLeft).apply()
                 if (secondsLeft <= 10 && tickingSound) {
                     runCatching { toneGenerator.startTone(ToneGenerator.TONE_PROP_BEEP, if (secondsLeft <= 5) 110 else 65) }
                 }
@@ -505,7 +572,10 @@ private fun StudyMateApp() {
                 coins = coins,
                 level = level,
                 onBack = {
-                    if (currentScreen == Screen.QUIZ && !quizResultSaved) quizPaused = true
+                    if (currentScreen == Screen.QUIZ && !quizResultSaved) {
+                        quizPaused = true
+                        saveProgress()
+                    }
                     screen = Screen.HOME.name
                 },
                 onProfile = { screen = Screen.PROFILE.name }
@@ -517,7 +587,7 @@ private fun StudyMateApp() {
                 onNavigate = { screen = it.name }
             )
         },
-        containerColor = bg
+        containerColor = MaterialTheme.colorScheme.background
     ) { innerPadding ->
         Box(
             modifier = Modifier
@@ -569,6 +639,15 @@ private fun StudyMateApp() {
                                 }
                             }
                         }
+
+                        val missionToday = LocalDate.now().toString()
+                        val missionProgress = if (missionDate == missionToday) missionAnswers.coerceAtMost(5) else 0
+                        CardBox(
+                            "🎯 Daily Mission • ${if (missionRewardClaimed && missionDate == missionToday) "Completed" else "$missionProgress/5 answers"}",
+                            if (missionRewardClaimed && missionDate == missionToday) "Great work! You earned today's 30 bonus coins. Come back tomorrow for a new mission." else "Answer 5 quiz questions today to earn +30 bonus coins. Progress: $missionProgress/5."
+                        ) {}
+
+                        CardBox("📴 Offline Ready", "Core quizzes, notes, flashcards, progress, coins, and shop inventory are stored on this device. Online sync is not configured yet.") {}
 
                         NeonActionCard(
                             title = "Quick Quiz",
@@ -647,7 +726,7 @@ private fun StudyMateApp() {
 
                     Screen.SUBJECTS -> {
                         Heading("📚 Subjects", "Select a subject to test your level.")
-                        val allSubjects = (listOf("Mixed", "Math", "Science", "English", "Filipino", "Araling Panlipunan", "ICT", "PE & Health") + customSubjects).distinct()
+                        val allSubjects = (listOf("Mixed", "Math", "Science", "English", "Filipino", "Araling Panlipunan", "ICT", "PE & Health", "Study Skills") + customSubjects).distinct()
                         allSubjects.forEach { subj ->
                             CardBox(
                                 title = "${emoji(subj)} $subj",
@@ -699,7 +778,13 @@ private fun StudyMateApp() {
                         CardBox("📝 Total Answered", "$answered questions") {}
                         CardBox("✅ Correct Answers", "$correct correct") {}
                         CardBox("🔥 Current Streak", "$dailyStreak days") {}
-                        CardBox("🏆 Local Leaderboard", if (localLeaderboard.isEmpty()) "No records yet." else localLeaderboard.joinToString("\n")) {}
+                        CardBox("🏆 Local Leaderboard", if (localLeaderboard.isEmpty()) "No records yet." else localLeaderboard.take(10).mapIndexed { index, row ->
+                            val parts = row.split("|")
+                            val player = parts.getOrNull(3).orEmpty().ifBlank { "Student" }
+                            val score = parts.getOrNull(0).orEmpty()
+                            val right = parts.getOrNull(1).orEmpty()
+                            "${index + 1}. $player • $score pts • $right correct"
+                        }.joinToString("\n")) {}
                     }
 
                     Screen.SEARCH -> {
@@ -730,6 +815,8 @@ private fun StudyMateApp() {
                     Screen.PROFILE -> {
                         ProfilePage(
                             name = studentName,
+                            avatar = profileAvatar,
+                            onAvatarChange = { profileAvatar = it; prefs.edit().putString("profileAvatar", it).apply() },
                             email = studentEmail,
                             level = level,
                             answered = answered,
@@ -742,10 +829,7 @@ private fun StudyMateApp() {
                             lightTheme = lightTheme,
                             tickingSound = tickingSound,
                             importMessage = importMessage,
-                            onToggleLightTheme = {
-                                lightTheme = !lightTheme
-                                prefs.edit().putBoolean("lightTheme", lightTheme).apply()
-                            },
+                            onToggleLightTheme = onToggleLightTheme,
                             onToggleTicking = {
                                 tickingSound = !tickingSound
                                 prefs.edit().putBoolean("tickingSound", tickingSound).apply()
@@ -822,7 +906,11 @@ private fun StudyMateApp() {
                                             hiddenChoices = emptySet()
                                             selectedAnswer = -1
                                             revealed = false
-                                            if (questionIndex + 1 < questions.size) questionIndex++ else finishQuiz()
+                                            if (questionIndex + 1 < questions.size) {
+                                                questionIndex++
+                                                secondsLeft = 30
+                                                saveProgress()
+                                            } else finishQuiz()
                                         }
                                     }, enabled = !revealed && (freeSkip || skipItems > 0), modifier = Modifier.weight(1f)) { Text(if (freeSkip) "⏭ Skip FREE" else "⏭ Skip ($skipItems)") }
                                 }
@@ -860,6 +948,7 @@ private fun StudyMateApp() {
                                             if (questionIndex + 1 < questions.size && lives > 0) {
                                                 questionIndex++
                                                 secondsLeft = 30
+                                                saveProgress()
                                             } else {
                                                 finishQuiz()
                                             }
@@ -1272,6 +1361,8 @@ private fun ShopModalItem(
 @Composable
 private fun ProfilePage(
     name: String,
+    avatar: String,
+    onAvatarChange: (String) -> Unit,
     email: String,
     level: Int,
     answered: Int,
@@ -1293,7 +1384,20 @@ private fun ProfilePage(
     var localName by rememberSaveable(name) { mutableStateOf(name) }
     var localEmail by rememberSaveable(email) { mutableStateOf(email) }
 
-    Heading("👤 Student Profile", "Your StudyMate account and learning summary.")
+    Heading("$avatar Student Profile", "Customize your profile and learning summary.")
+    Text("Choose your avatar", fontWeight = FontWeight.SemiBold)
+    Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
+        listOf("🎓", "🦊", "🐼", "🚀", "🌟", "📚").forEach { icon ->
+            Surface(
+                modifier = Modifier.weight(1f).clickable { onAvatarChange(icon) },
+                shape = RoundedCornerShape(14.dp),
+                color = if (avatar == icon) MaterialTheme.colorScheme.primary.copy(alpha = 0.22f) else MaterialTheme.colorScheme.surface,
+                border = if (avatar == icon) androidx.compose.foundation.BorderStroke(2.dp, MaterialTheme.colorScheme.primary) else null
+            ) {
+                Text(icon, modifier = Modifier.padding(vertical = 10.dp), textAlign = androidx.compose.ui.text.style.TextAlign.Center, style = MaterialTheme.typography.titleLarge)
+            }
+        }
+    }
 
     OutlinedTextField(
         value = localName,
@@ -1971,7 +2075,7 @@ private fun emoji(subject: String): String = when (subject) {
 
 private fun makeQuestions(subject: String, level: Int): List<Question> {
     val subjects = if (subject == "Mixed") {
-        listOf("Math", "Science", "English", "Filipino", "Araling Panlipunan", "ICT", "PE & Health")
+        listOf("Math", "Science", "English", "Filipino", "Araling Panlipunan", "ICT", "PE & Health", "Study Skills")
     } else {
         listOf(subject)
     }
@@ -2240,6 +2344,17 @@ private fun questionBank(subject: String): List<BankItem> = (when (subject) {
         BankItem("Ano ang gamit ng web browser?", listOf("Mag-browse ng websites", "Magluto", "Mag-print ng pera", "Mag-charge ng phone"), 0, "Ang browser ay ginagamit para mag-access ng web pages."),
         BankItem("Alin ang halimbawa ng operating system?", listOf("Android", "Keyboard", "HDMI", "Mouse"), 0, "Android ay isang operating system."),
         BankItem("Ano ang tawag sa programang tumutulong protektahan ang computer laban sa malware?", listOf("Antivirus", "Calculator", "Player", "Editor"), 0, "Ang antivirus software ay tumutulong laban sa malware.")
+    )
+
+    "Study Skills" -> listOf(
+        BankItem("Ano ang magandang unang hakbang kapag maraming gawain?", listOf("Unahin ang pinakamadali lang palagi", "Gumawa ng listahan at magtakda ng prayoridad", "Huwag pansinin ang deadline", "Gawin lahat nang sabay-sabay"), 1, "Ang listahan at malinaw na prayoridad ay tumutulong sa pagplano."),
+        BankItem("Aling paraan ang makatutulong para maalala ang aralin?", listOf("Active recall at pagsagot nang walang kopya", "Basahin lang nang paulit-ulit habang distracted", "Iwasang mag-review", "Mag-aral nang walang pahinga"), 0, "Ang active recall ay nagpapraktis ng pagkuha ng impormasyon mula sa memorya."),
+        BankItem("Bakit nakatutulong ang spaced practice?", listOf("Pinagsisiksik nito lahat sa isang gabi", "Ibinabalik ang review sa magkakahiwalay na oras", "Inaalis nito ang pangangailangang matulog", "Pinapalitan nito ang pagsasanay"), 1, "Ang pag-uulit sa pagitan ng mga araw ay nakatutulong sa pangmatagalang pag-alala."),
+        BankItem("Ano ang mainam gawin kapag hindi mo maintindihan ang tanong?", listOf("Hulaan agad nang hindi binabasa", "Hatiin ito sa mas maliliit na bahagi at tukuyin ang hinihingi", "Isara ang libro", "Kopyahin ang unang sagot"), 1, "Ang paghahati sa problema ay nakatutulong makita ang mga kinakailangang hakbang."),
+        BankItem("Alin ang magandang paraan para mabawasan ang distractions habang nag-aaral?", listOf("Ihanda ang gamit at ilayo ang hindi kailangang notifications", "Buksan lahat ng social media", "Magpalit ng gawain kada ilang segundo", "Mag-aral sa maraming sabay-sabay na video"), 0, "Ang paghahanda ng lugar at paglimita ng notifications ay nakatutulong sa focus."),
+        BankItem("Tama o Mali: Ang maikling pahinga sa pagitan ng study sessions ay maaaring makatulong sa pagpapanatili ng focus.", listOf("Tama", "Mali"), 0, "Ang planadong maiikling pahinga ay maaaring makatulong sa pagbalik ng atensyon."),
+        BankItem("Ano ang dapat gawin pagkatapos magkamali sa practice quiz?", listOf("Tingnan ang paliwanag at unawain ang pagkakamali", "Burahin ang tanong sa isip at huwag nang balikan", "Itigil ang pag-aaral", "Memorize ang letra lang"), 0, "Ang pag-review sa paliwanag ay tumutulong matukoy ang dapat pag-aralan muli."),
+        BankItem("Alin ang mas kapaki-pakinabang na study goal?", listOf("Mag-aral nang kaunti kapag may oras lang", "Tapusin ang 10 practice questions bago mag-7 PM", "Maging perpekto agad", "Huwag magtakda ng oras"), 1, "Ang tiyak at nasusukat na layunin na may takdang oras ay mas madaling sundan.")
     )
 
     "PE & Health" -> listOf(
