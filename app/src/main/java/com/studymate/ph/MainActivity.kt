@@ -718,12 +718,57 @@ private fun StudyMateApp() {
                             onProfile = { screen = Screen.PROFILE.name }
                         )
 
+                        // Quick-access tiles use the existing destinations and handlers.
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            HomeShortcutTile(
+                                modifier = Modifier.weight(1f),
+                                icon = "🎮",
+                                title = "Quizzes",
+                                subtitle = "Play & earn XP",
+                                accent = Color(0xFF9B7BFF),
+                                onClick = { openQuickQuiz() }
+                            )
+                            HomeShortcutTile(
+                                modifier = Modifier.weight(1f),
+                                icon = "📝",
+                                title = "Study Notes",
+                                subtitle = "Your reviewers",
+                                accent = Color(0xFF35D7F2),
+                                onClick = { screen = Screen.NOTES.name }
+                            )
+                        }
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            HomeShortcutTile(
+                                modifier = Modifier.weight(1f),
+                                icon = "🗂️",
+                                title = "Flashcards",
+                                subtitle = "Quick review",
+                                accent = Color(0xFFFF72C6),
+                                onClick = { screen = Screen.FLASHCARDS.name }
+                            )
+                            HomeShortcutTile(
+                                modifier = Modifier.weight(1f),
+                                icon = "📚",
+                                title = "Subjects",
+                                subtitle = "Choose a topic",
+                                accent = Color(0xFF35D7F2),
+                                onClick = { screen = Screen.SUBJECTS.name }
+                            )
+                        }
+
                         if (quizPaused && questions.isNotEmpty() && !quizResultSaved) {
                             Card(
                                 modifier = Modifier.fillMaxWidth(),
                                 shape = RoundedCornerShape(22.dp),
-                                colors = CardDefaults.cardColors(containerColor = panel),
-                                elevation = CardDefaults.cardElevation(defaultElevation = 6.dp)
+                                colors = CardDefaults.cardColors(containerColor = Color(0xFF111C30)),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, purple.copy(alpha = 0.42f)),
+                                elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
                             ) {
                                 Column(
                                     modifier = Modifier.fillMaxWidth().padding(16.dp),
@@ -1713,6 +1758,51 @@ private fun CardBox(title: String, subtitle: String, onClick: () -> Unit = {}) {
                 Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                 Text(subtitle, color = muted)
             }
+        }
+    }
+}
+
+@Composable
+private fun HomeShortcutTile(
+    modifier: Modifier = Modifier,
+    icon: String,
+    title: String,
+    subtitle: String,
+    accent: Color,
+    onClick: () -> Unit
+) {
+    Surface(
+        modifier = modifier.clickable(onClick = onClick),
+        shape = RoundedCornerShape(20.dp),
+        color = Color(0xFF111C30),
+        border = androidx.compose.foundation.BorderStroke(1.dp, accent.copy(alpha = 0.58f)),
+        shadowElevation = 4.dp
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(
+                    Brush.horizontalGradient(
+                        listOf(accent.copy(alpha = 0.16f), Color(0xFF111C30), Color(0xFF0D1729))
+                    )
+                )
+                .padding(horizontal = 12.dp, vertical = 15.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Surface(
+                shape = RoundedCornerShape(12.dp),
+                color = accent.copy(alpha = 0.18f),
+                border = androidx.compose.foundation.BorderStroke(1.dp, accent.copy(alpha = 0.45f))
+            ) {
+                Text(icon, modifier = Modifier.padding(9.dp), style = MaterialTheme.typography.titleMedium)
+            }
+            Column(modifier = Modifier.weight(1f)) {
+                Text(title, fontWeight = FontWeight.ExtraBold, color = Color(0xFFEAF7FF), style = MaterialTheme.typography.titleSmall)
+                Spacer(Modifier.height(3.dp))
+                Text(subtitle, color = muted, style = MaterialTheme.typography.labelSmall)
+            }
+            Text("›", color = accent, fontWeight = FontWeight.ExtraBold, style = MaterialTheme.typography.titleLarge)
         }
     }
 }
