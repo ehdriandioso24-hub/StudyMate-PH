@@ -3,6 +3,8 @@ package com.studymate.ph
 import android.content.Context
 import android.media.AudioManager
 import android.media.MediaPlayer
+import android.media.SoundPool
+import android.media.AudioAttributes
 import android.media.ToneGenerator
 import android.os.Bundle
 import java.time.LocalDate
@@ -246,8 +248,34 @@ private fun StudyMateApp() {
     var skipItems by remember { mutableIntStateOf(prefs.getInt("item_skip", 0).coerceAtLeast(0)) }
     var selectedSubject by rememberSaveable { mutableStateOf(prefs.getString("activeSelectedSubject", "Mixed") ?: "Mixed") }
     var tickingSound by remember { mutableStateOf(prefs.getBoolean("tickingSound", true)) }
+    var musicVolume by remember { mutableStateOf(prefs.getFloat("musicVolume", 0.35f).coerceIn(0f, 1f)) }
+    var touchVolume by remember { mutableStateOf(prefs.getFloat("touchVolume", 0.65f).coerceIn(0f, 1f)) }
+    var coinVolume by remember { mutableStateOf(prefs.getFloat("coinVolume", 0.80f).coerceIn(0f, 1f)) }
+    var correctVolume by remember { mutableStateOf(prefs.getFloat("correctVolume", 0.80f).coerceIn(0f, 1f)) }
+    var wrongVolume by remember { mutableStateOf(prefs.getFloat("wrongVolume", 0.80f).coerceIn(0f, 1f)) }
+    var gameOverVolume by remember { mutableStateOf(prefs.getFloat("gameOverVolume", 0.85f).coerceIn(0f, 1f)) }
+    var levelUpVolume by remember { mutableStateOf(prefs.getFloat("levelUpVolume", 0.85f).coerceIn(0f, 1f)) }
     val toneGenerator = remember { ToneGenerator(AudioManager.STREAM_MUSIC, 55) }
-    DisposableEffect(Unit) { onDispose { toneGenerator.release() } }
+    val soundPool = remember {
+        SoundPool.Builder().setMaxStreams(6).setAudioAttributes(
+            AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_GAME).setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION).build()
+        ).build()
+    }
+    val sfxIds = remember(soundPool) {
+        mapOf(
+            "touch" to soundPool.load(context, R.raw.touch_button, 1),
+            "correct" to soundPool.load(context, R.raw.correct_answer, 1),
+            "wrong" to soundPool.load(context, R.raw.wrong_answer, 1),
+            "level" to soundPool.load(context, R.raw.level_up_bravo, 1),
+            "coin" to soundPool.load(context, R.raw.coin_collect, 1),
+            "gameover" to soundPool.load(context, R.raw.game_over, 1)
+        )
+    }
+    fun playSfx(name: String, volume: Float) {
+        val id = sfxIds[name] ?: return
+        if (volume > 0f) runCatching { soundPool.play(id, volume.coerceIn(0f, 1f), volume.coerceIn(0f, 1f), 1, 0, 1f) }
+    }
+    DisposableEffect(Unit) { onDispose { toneGenerator.release(); soundPool.release() } }
 
 
     var loggedIn by remember {
@@ -441,6 +469,7 @@ private fun StudyMateApp() {
         }
         val isCorrect = index == q.answer
         if (isCorrect) {
+            playSfx("correct", correctVolume)
             if (tickingSound) runCatching { toneGenerator.startTone(ToneGenerator.TONE_PROP_ACK, 120) }
             experienceXp += 10
             correct++
@@ -452,6 +481,7 @@ private fun StudyMateApp() {
             saveProgress()
             android.widget.Toast.makeText(context, "Correct! +10 coins 🪙", android.widget.Toast.LENGTH_SHORT).show()
         } else {
+            playSfx("wrong", wrongVolume)
             answered++
             history.add(0, ReviewItem(q, index, false, level))
             while (history.size > 500) history.removeAt(history.lastIndex)
@@ -464,6 +494,7 @@ private fun StudyMateApp() {
         val today = LocalDate.now().toString()
         if (dailyLoginClaimDate == today) return
         coins += 25
+        playSfx("coin", coinVolume)
         dailyLoginClaimDate = today
         showCoinBurst = true
         saveProgress()
@@ -485,6 +516,7 @@ private fun StudyMateApp() {
             return
         }
         coins -= cost
+        playSfx("coin", coinVolume)
         when (type) {
             "5050" -> fiftyFiftyItems++
             "time" -> extraTimeItems++
@@ -637,6 +669,7 @@ private fun StudyMateApp() {
         val isCorrect = !timedOut && index == q.answer
         answered++
         if (isCorrect) {
+            playSfx("correct", correctVolume)
             correct++
             experienceXp += 10
             quizCorrect++
@@ -646,6 +679,7 @@ private fun StudyMateApp() {
             quizScore += 100 + speedBonus + comboBonus
             coins += 10
         } else {
+            playSfx("wrong", wrongVolume)
             if (tickingSound) runCatching { toneGenerator.startTone(ToneGenerator.TONE_PROP_NACK, 160) }
             lives = (lives - 1).coerceAtLeast(0)
             streak = 0
@@ -723,29 +757,43 @@ private fun StudyMateApp() {
         Screen.valueOf(screen)
     }.getOrDefault(Screen.HOME)
 
-    // Background music is independent of the Red Zone ticking-sound setting.
-    // Switch tracks automatically when the user moves between Home, Subjects, and Quiz.
-    DisposableEffect(currentScreen) {
-        val musicResId = when (currentScreen) {
-            Screen.HOME -> R.raw.home_background_music
-            Screen.SUBJECTS -> R.raw.all_subject_music
-            Screen.QUIZ -> R.raw.quiz_music
-            else -> null
+    // Keep the same Home player alive across ordinary screens so the track does not restart.
+    val musicTrack = when (currentScreen) {
+        Screen.SUBJECTS -> "subjects"
+        Screen.QUIZ -> "quiz"
+        else -> "home"
+    }
+    var activeMusicPlayer by remember { mutableStateOf<MediaPlayer?>(null) }
+    DisposableEffect(musicTrack) {
+        // Home music continues uninterrupted on Search, Notes, Timer, Progress, Flashcards,
+        // Profile, Settings, Shop, and other non-quiz/non-subject screens.
+        val musicResId = when (musicTrack) {
+            "subjects" -> R.raw.all_subject_music
+            "quiz" -> R.raw.quiz_music
+            else -> R.raw.home_background_music
         }
         val player = musicResId?.let { resourceId ->
             runCatching { MediaPlayer.create(context.applicationContext, resourceId) }.getOrNull()
         }
         if (player != null) {
             player.isLooping = true
-            player.setVolume(0.35f, 0.35f)
+            player.setVolume(musicVolume, musicVolume)
+            activeMusicPlayer = player
             runCatching { player.start() }
         }
         onDispose {
+            activeMusicPlayer = null
             if (player != null) {
                 runCatching { if (player.isPlaying) player.stop() }
                 runCatching { player.release() }
             }
         }
+    }
+    SideEffect { activeMusicPlayer?.setVolume(musicVolume, musicVolume) }
+
+    LaunchedEffect(currentScreen) {
+        if (currentScreen == Screen.GAME_OVER) playSfx("gameover", gameOverVolume)
+        if (currentScreen == Screen.LEVEL_UP || currentScreen == Screen.LEVEL_COMPLETE) playSfx("level", levelUpVolume)
     }
 
     BackHandler(enabled = currentScreen != Screen.HOME) {
@@ -952,7 +1000,7 @@ private fun StudyMateApp() {
                             subtitle = if (claimed) "Come back tomorrow for another +25 coins" else "Tap here to claim your free +25 coins!",
                             badge = if (claimed) "Claimed" else "+25 Coins",
                             accent = Color(0xFF10B981),
-                            onClick = { claimDailyLoginCoins() }
+                            onClick = { playSfx("touch", touchVolume); claimDailyLoginCoins() }
                         )
 
                         NeonActionCard(
@@ -1141,6 +1189,20 @@ private fun StudyMateApp() {
                             skip = skipItems,
                             experienceXp = experienceXp,
                             tickingSound = tickingSound,
+                            musicVolume = musicVolume,
+                            touchVolume = touchVolume,
+                            coinVolume = coinVolume,
+                            correctVolume = correctVolume,
+                            wrongVolume = wrongVolume,
+                            gameOverVolume = gameOverVolume,
+                            levelUpVolume = levelUpVolume,
+                            onMusicVolumeChange = { musicVolume = it; prefs.edit().putFloat("musicVolume", it).apply() },
+                            onTouchVolumeChange = { touchVolume = it; prefs.edit().putFloat("touchVolume", it).apply() },
+                            onCoinVolumeChange = { coinVolume = it; prefs.edit().putFloat("coinVolume", it).apply() },
+                            onCorrectVolumeChange = { correctVolume = it; prefs.edit().putFloat("correctVolume", it).apply() },
+                            onWrongVolumeChange = { wrongVolume = it; prefs.edit().putFloat("wrongVolume", it).apply() },
+                            onGameOverVolumeChange = { gameOverVolume = it; prefs.edit().putFloat("gameOverVolume", it).apply() },
+                            onLevelUpVolumeChange = { levelUpVolume = it; prefs.edit().putFloat("levelUpVolume", it).apply() },
                             importMessage = importMessage,
                             onToggleTicking = {
                                 tickingSound = !tickingSound
@@ -1671,6 +1733,17 @@ private fun ShopModalItem(
 }
 
 @Composable
+private fun VolumeControl(label: String, volume: Float, onChange: (Float) -> Unit) {
+    Column(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text(label, modifier = Modifier.weight(1f), fontWeight = FontWeight.Medium)
+            Text("${(volume * 100).toInt()}%", color = MaterialTheme.colorScheme.secondary)
+        }
+        Slider(value = volume, onValueChange = onChange, valueRange = 0f..1f)
+    }
+}
+
+@Composable
 private fun ProfilePage(
     name: String,
     avatar: String,
@@ -1686,6 +1759,20 @@ private fun ProfilePage(
     skip: Int,
     experienceXp: Int,
     tickingSound: Boolean,
+    musicVolume: Float,
+    touchVolume: Float,
+    coinVolume: Float,
+    correctVolume: Float,
+    wrongVolume: Float,
+    gameOverVolume: Float,
+    levelUpVolume: Float,
+    onMusicVolumeChange: (Float) -> Unit,
+    onTouchVolumeChange: (Float) -> Unit,
+    onCoinVolumeChange: (Float) -> Unit,
+    onCorrectVolumeChange: (Float) -> Unit,
+    onWrongVolumeChange: (Float) -> Unit,
+    onGameOverVolumeChange: (Float) -> Unit,
+    onLevelUpVolumeChange: (Float) -> Unit,
     importMessage: String,
     onToggleTicking: () -> Unit,
     onImport: () -> Unit,
@@ -1781,6 +1868,15 @@ private fun ProfilePage(
         }
         Switch(checked = tickingSound, onCheckedChange = { onToggleTicking() })
     }
+
+    Heading("🔊 Sound & Music Volume", "I-adjust nang magkakahiwalay ang bawat tunog. 0% = mute, 100% = pinakamalakas.")
+    VolumeControl("🎵 Background music", musicVolume, onMusicVolumeChange)
+    VolumeControl("👆 Touch / button effects", touchVolume, onTouchVolumeChange)
+    VolumeControl("🪙 Coins claim / purchase", coinVolume, onCoinVolumeChange)
+    VolumeControl("✅ Correct answer", correctVolume, onCorrectVolumeChange)
+    VolumeControl("❌ Wrong answer", wrongVolume, onWrongVolumeChange)
+    VolumeControl("💔 Game over", gameOverVolume, onGameOverVolumeChange)
+    VolumeControl("🏆 Level up / win", levelUpVolume, onLevelUpVolumeChange)
 
     OutlinedButton(onClick = onImport, modifier = Modifier.fillMaxWidth()) {
         Text("🗂️ Import Lessons / Questions")
