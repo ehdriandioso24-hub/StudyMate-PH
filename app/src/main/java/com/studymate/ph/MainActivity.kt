@@ -588,7 +588,6 @@ private fun StudyMateApp() {
             weeklyRewardClaimed = true
             android.widget.Toast.makeText(context, "Weekly challenge complete! +100 coins 🎉", android.widget.Toast.LENGTH_LONG).show()
         }
-        val todayForMission = LocalDate.now().toString()
         if (missionDate != todayForMission) {
             missionDate = todayForMission
             missionAnswers = 0
