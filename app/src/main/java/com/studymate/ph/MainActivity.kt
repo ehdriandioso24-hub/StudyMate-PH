@@ -13,6 +13,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -85,6 +86,13 @@ class MainActivity : ComponentActivity() {
                     onPrimary = Color(0xFF160D28),
                     onBackground = Color(0xFFF5F3FF),
                     onSurface = Color(0xFFF5F3FF)
+                ),
+                shapes = Shapes(
+                    extraSmall = RoundedCornerShape(8.dp),
+                    small = RoundedCornerShape(12.dp),
+                    medium = RoundedCornerShape(16.dp),
+                    large = RoundedCornerShape(22.dp),
+                    extraLarge = RoundedCornerShape(28.dp)
                 )
             ) {
                 Surface(
@@ -152,6 +160,7 @@ private fun StudyMateApp() {
     var tickingSound by remember { mutableStateOf(prefs.getBoolean("tickingSound", true)) }
     val toneGenerator = remember { ToneGenerator(AudioManager.STREAM_MUSIC, 55) }
     DisposableEffect(Unit) { onDispose { toneGenerator.release() } }
+
 
     var loggedIn by remember {
         mutableStateOf(prefs.getBoolean("loggedIn", false))
@@ -225,6 +234,13 @@ private fun StudyMateApp() {
     var showQuickQuizModal by remember { mutableStateOf(false) }
     var showCoinShopModal by remember { mutableStateOf(false) }
     var showCoinBurst by remember { mutableStateOf(false) }
+    var quizPaused by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(showCoinBurst) {
+        if (showCoinBurst) {
+            delay(1800)
+            showCoinBurst = false
+        }
+    }
     var quickQuestion by remember { mutableStateOf<Question?>(null) }
     var quickAnswered by remember { mutableStateOf(false) }
     var quickSelected by rememberSaveable { mutableIntStateOf(-1) }
@@ -277,12 +293,12 @@ private fun StudyMateApp() {
         if (isCorrect) {
             correct++
             answered++
-            coins += 20
+            coins += 10
             answeredIds.add(q.id)
             history.add(0, ReviewItem(q, index, true, level))
             while (history.size > 500) history.removeAt(history.lastIndex)
             saveProgress()
-            android.widget.Toast.makeText(context, "Correct! +20 coins 🪙", android.widget.Toast.LENGTH_SHORT).show()
+            android.widget.Toast.makeText(context, "Correct! +10 coins 🪙", android.widget.Toast.LENGTH_SHORT).show()
         } else {
             android.widget.Toast.makeText(context, "Not quite. Try the full quiz for more practice.", android.widget.Toast.LENGTH_SHORT).show()
         }
@@ -323,6 +339,7 @@ private fun StudyMateApp() {
     }
 
     fun startQuiz(subject: String, daily: Boolean = false) {
+        quizPaused = false
         selectedSubject = subject
         level = subjectLevels.getOrPut(subject) {
             prefs.getInt("level_$subject", prefs.getInt("level", 1)).coerceIn(1, 100)
@@ -357,6 +374,7 @@ private fun StudyMateApp() {
     }
 
     fun retryCurrentQuiz() {
+        quizPaused = false
         questionIndex = 0
         selectedAnswer = -1
         revealed = false
@@ -374,7 +392,6 @@ private fun StudyMateApp() {
         hiddenChoices = emptySet()
         quizResultSaved = false
         quizStartedAt = System.currentTimeMillis()
-        dailyChallengeActive = false
         questions = questions.shuffled()
         screen = Screen.QUIZ.name
     }
@@ -405,7 +422,7 @@ private fun StudyMateApp() {
             val speedBonus = (secondsLeft * 2).coerceAtLeast(0)
             val comboBonus = if (streak >= 5) 100 else if (streak >= 3) 50 else 0
             quizScore += 100 + speedBonus + comboBonus
-            coins += 10 + (speedBonus / 2) + if (streak >= 5) 10 else 0
+            coins += 10
         } else {
             lives = (lives - 1).coerceAtLeast(0)
             streak = 0
@@ -415,12 +432,14 @@ private fun StudyMateApp() {
         while (history.size > 500) history.removeAt(history.lastIndex)
         saveProgress()
         if (lives <= 0) {
+            quizPaused = false
             saveQuizResult()
             screen = Screen.GAME_OVER.name
         }
     }
 
     fun finishQuiz() {
+        quizPaused = false
         saveQuizResult()
         val total = questions.size.coerceAtLeast(1)
         val passNeeded = kotlin.math.ceil(total * 0.75).toInt()
@@ -458,6 +477,9 @@ private fun StudyMateApp() {
     }.getOrDefault(Screen.HOME)
 
     BackHandler(enabled = currentScreen != Screen.HOME) {
+        if (currentScreen == Screen.QUIZ && !quizResultSaved) {
+            quizPaused = true
+        }
         screen = Screen.HOME.name
     }
 
@@ -482,7 +504,10 @@ private fun StudyMateApp() {
                 screen = currentScreen,
                 coins = coins,
                 level = level,
-                onBack = { screen = Screen.HOME.name },
+                onBack = {
+                    if (currentScreen == Screen.QUIZ && !quizResultSaved) quizPaused = true
+                    screen = Screen.HOME.name
+                },
                 onProfile = { screen = Screen.PROFILE.name }
             )
         },
@@ -517,6 +542,33 @@ private fun StudyMateApp() {
                             achievements = achievementsFor(answered, correct).size,
                             onProfile = { screen = Screen.PROFILE.name }
                         )
+
+                        if (quizPaused && questions.isNotEmpty() && !quizResultSaved) {
+                            Card(
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(22.dp),
+                                colors = CardDefaults.cardColors(containerColor = panel),
+                                elevation = CardDefaults.cardElevation(defaultElevation = 6.dp)
+                            ) {
+                                Column(
+                                    modifier = Modifier.fillMaxWidth().padding(16.dp),
+                                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                                ) {
+                                    Text("⏸️ Quiz Paused", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold, color = purple)
+                                    Text("Question ${questionIndex + 1} of ${questions.size} • Score: $quizScore • Lives: $lives", color = muted)
+                                    Button(
+                                        onClick = { quizPaused = false; screen = Screen.QUIZ.name },
+                                        modifier = Modifier.fillMaxWidth(),
+                                        shape = RoundedCornerShape(16.dp)
+                                    ) { Text("▶ Continue Quiz", fontWeight = FontWeight.Bold) }
+                                    OutlinedButton(
+                                        onClick = { retryCurrentQuiz() },
+                                        modifier = Modifier.fillMaxWidth(),
+                                        shape = RoundedCornerShape(16.dp)
+                                    ) { Text("🔄 Restart Quiz") }
+                                }
+                            }
+                        }
 
                         NeonActionCard(
                             title = "Quick Quiz",
@@ -746,24 +798,24 @@ private fun StudyMateApp() {
                                 }
                                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                                     OutlinedButton(onClick = {
-                                        if (!revealed && !used5050 && (free5050 || fiftyFiftyItems > 0)) {
+                                        if (!revealed && (free5050 || fiftyFiftyItems > 0)) {
                                             val wrong = q.choices.indices.filter { it != q.answer && it !in hiddenChoices }.shuffled().take(2).toSet()
                                             hiddenChoices = hiddenChoices + wrong
                                             used5050 = true
                                             if (!free5050 && fiftyFiftyItems > 0) fiftyFiftyItems-- else free5050 = false
                                             saveProgress()
                                         }
-                                    }, enabled = !revealed && !used5050 && (free5050 || fiftyFiftyItems > 0), modifier = Modifier.weight(1f)) { Text("50:50") }
+                                    }, enabled = !revealed && (free5050 || fiftyFiftyItems > 0), modifier = Modifier.weight(1f)) { Text(if (free5050) "🎯 50:50 FREE" else "🎯 50:50 ($fiftyFiftyItems)") }
                                     OutlinedButton(onClick = {
-                                        if (!revealed && !usedTimeFreeze && (freeTime || extraTimeItems > 0)) {
+                                        if (!revealed && (freeTime || extraTimeItems > 0)) {
                                             secondsLeft += 15
                                             usedTimeFreeze = true
                                             if (!freeTime && extraTimeItems > 0) extraTimeItems-- else freeTime = false
                                             saveProgress()
                                         }
-                                    }, enabled = !revealed && !usedTimeFreeze && (freeTime || extraTimeItems > 0), modifier = Modifier.weight(1f)) { Text("+15 sec") }
+                                    }, enabled = !revealed && (freeTime || extraTimeItems > 0), modifier = Modifier.weight(1f)) { Text(if (freeTime) "⏱ +15 sec FREE" else "⏱ +15 sec ($extraTimeItems)") }
                                     OutlinedButton(onClick = {
-                                        if (!revealed && !usedSkip && (freeSkip || skipItems > 0)) {
+                                        if (!revealed && (freeSkip || skipItems > 0)) {
                                             usedSkip = true
                                             if (!freeSkip && skipItems > 0) skipItems-- else freeSkip = false
                                             saveProgress()
@@ -772,7 +824,7 @@ private fun StudyMateApp() {
                                             revealed = false
                                             if (questionIndex + 1 < questions.size) questionIndex++ else finishQuiz()
                                         }
-                                    }, enabled = !revealed && !usedSkip && (freeSkip || skipItems > 0), modifier = Modifier.weight(1f)) { Text("Skip") }
+                                    }, enabled = !revealed && (freeSkip || skipItems > 0), modifier = Modifier.weight(1f)) { Text(if (freeSkip) "⏭ Skip FREE" else "⏭ Skip ($skipItems)") }
                                 }
                                 Text(q.text, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
 
@@ -987,7 +1039,7 @@ private fun StudyMateModals(
                         }
                         if (quickAnswered) {
                             Text(
-                                if (quickSelected == question.answer) "Correct! +20 coins 🪙" else "Incorrect. ${question.explanation}",
+                                if (quickSelected == question.answer) "Correct! +10 coins 🪙" else "Incorrect. ${question.explanation}",
                                 color = if (quickSelected == question.answer) Color(0xFF6EE7B7) else Color(0xFFFDA4AF),
                                 fontWeight = FontWeight.Bold
                             )
@@ -1273,6 +1325,25 @@ private fun ProfilePage(
     CardBox("📝 Questions answered", "$answered") {}
     CardBox("🎯 Correct answers", "$correct") {}
     CardBox("🏆 Achievements", achievementsFor(answered, correct).joinToString(" • "))
+
+    Heading("ℹ️ About StudyMate PH", "Your Smart Learning Companion")
+    CardBox(
+        "LEARN SMARTER. DREAM BIGGER.",
+        "Ang StudyMate PH ay isang educational application na idinisenyo upang maging maaasahang katuwang ng mga estudyanteng Pilipino sa kanilang paglalakbay sa pag-aaral. Layunin nitong gawing mas organisado, mas makabuluhan, at mas nakahihikayat ang bawat hakbang tungo sa kaalaman."
+    ) {}
+    CardBox(
+        "Ang Layunin Namin",
+        "Naniniwala kami na ang pag-aaral ay hindi lamang tungkol sa pagkuha ng mataas na marka—ito rin ay tungkol sa pagtuklas ng potensyal, paghubog ng disiplina, at pagbuo ng mas magandang kinabukasan. Nais ng StudyMate PH na maging bahagi ng prosesong iyon sa pamamagitan ng paghikayat sa mga estudyanteng matuto nang may layunin at magpatuloy kahit may mga pagsubok."
+    ) {}
+    CardBox(
+        "Bakit StudyMate PH?",
+        "📚 ORGANISADONG PAG-AARAL — Tulungan ang sarili na magkaroon ng mas maayos na routine at study habits.\n\n✨ MAS AKTIBONG PAGKATUTO — Gawing mas kawili-wili ang pagre-review at pag-unawa sa mga aralin.\n\n🚀 TUNGO SA MGA PANGARAP — Bawat maliit na hakbang sa pag-aaral ay ambag sa mas malaking tagumpay."
+    ) {}
+    CardBox(
+        "💜 Mensahe",
+        "“Hindi kailangang maging perpekto sa simula. Ang mahalaga ay ang patuloy na pagkatuto, pagsisikap, at paniniwala sa sariling kakayahan.”"
+    ) {}
+    CardBox("Developed by EHDZ", "Made with passion for Filipino learners.\nStudyMate PH • Learn Smarter. Dream Bigger.") {}
 
     Heading("⚙️ Settings", "App preferences are now inside your Profile.")
 
