@@ -14,6 +14,9 @@ import java.time.temporal.TemporalAdjusters
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -764,7 +767,8 @@ private fun StudyMateApp() {
         else -> "home"
     }
     var activeMusicPlayer by remember { mutableStateOf<MediaPlayer?>(null) }
-    DisposableEffect(musicTrack) {
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(musicTrack, lifecycleOwner) {
         // Home music continues uninterrupted on Search, Notes, Timer, Progress, Flashcards,
         // Profile, Settings, Shop, and other non-quiz/non-subject screens.
         val musicResId = when (musicTrack) {
@@ -781,7 +785,24 @@ private fun StudyMateApp() {
             activeMusicPlayer = player
             runCatching { player.start() }
         }
+
+        // Pause background music when the app goes to the background or is no longer visible.
+        // Resume the same track when the app returns, without creating an extra player.
+        val musicLifecycleObserver = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_STOP -> runCatching {
+                    if (player?.isPlaying == true) player.pause()
+                }
+                Lifecycle.Event.ON_START -> runCatching {
+                    if (player != null && !player.isPlaying) player.start()
+                }
+                else -> Unit
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(musicLifecycleObserver)
+
         onDispose {
+            lifecycleOwner.lifecycle.removeObserver(musicLifecycleObserver)
             activeMusicPlayer = null
             if (player != null) {
                 runCatching { if (player.isPlaying) player.stop() }
@@ -1852,7 +1873,9 @@ private fun ProfilePage(
         "💜 Mensahe",
         "“Hindi kailangang maging perpekto sa simula. Ang mahalaga ay ang patuloy na pagkatuto, pagsisikap, at paniniwala sa sariling kakayahan.”"
     ) {}
+    CardBox("🎚️ Level Difficulty", "Level 1–20: Easy\nLevel 21–40: Medium\nLevel 41–60: Hard\nLevel 61–80: Very Hard\nLevel 81–100: Expert") {}
     CardBox("Developed by EHDZ", "Made with passion for Filipino learners.\nStudyMate PH • Learn Smarter. Dream Bigger.") {}
+    CardBox("Tested by", "Prince Jay Orcullo") {}
 
     Heading("⚙️ Settings", "App preferences are now inside your Profile.")
 
