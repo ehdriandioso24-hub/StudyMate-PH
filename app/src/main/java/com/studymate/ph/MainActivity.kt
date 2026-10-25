@@ -31,6 +31,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.input.KeyboardOptions
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
@@ -2226,7 +2228,11 @@ private fun NotesPage(
         onValueChange = { title = it },
         label = { Text("Note title") },
         modifier = Modifier.fillMaxWidth(),
-        singleLine = true
+        singleLine = true,
+        keyboardOptions = KeyboardOptions(
+            capitalization = KeyboardCapitalization.Sentences,
+            autoCorrect = true
+        )
     )
 
     OutlinedTextField(
@@ -2234,7 +2240,11 @@ private fun NotesPage(
         onValueChange = { body = it },
         label = { Text("Write your notes here") },
         modifier = Modifier.fillMaxWidth(),
-        minLines = 3
+        minLines = 3,
+        keyboardOptions = KeyboardOptions(
+            capitalization = KeyboardCapitalization.Sentences,
+            autoCorrect = true
+        )
     )
 
     Button(
