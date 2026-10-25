@@ -31,8 +31,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
@@ -2216,8 +2216,9 @@ private fun NotesPage(
     var title by rememberSaveable { mutableStateOf("") }
     var body by rememberSaveable { mutableStateOf("") }
     var editingId by rememberSaveable { mutableStateOf<Long?>(null) }
+    var searchQuery by rememberSaveable { mutableStateOf("") }
 
-    Heading("📝 My Notes", "Notes are saved on this device.")
+    Heading("📝 My Notes", "Create, search, edit, and save your notes on this device.")
     Text(
         "Small steps every day lead to big results. 🌟",
         color = MaterialTheme.colorScheme.secondary
@@ -2240,11 +2241,16 @@ private fun NotesPage(
         onValueChange = { body = it },
         label = { Text("Write your notes here") },
         modifier = Modifier.fillMaxWidth(),
-        minLines = 3,
+        minLines = 5,
         keyboardOptions = KeyboardOptions(
             capitalization = KeyboardCapitalization.Sentences,
             autoCorrect = true
         )
+    )
+    Text(
+        "${body.trim().split(Regex("\\s+")).count { it.isNotBlank() }} words • ${body.length} characters",
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        style = MaterialTheme.typography.labelSmall
     )
 
     Button(
@@ -2280,11 +2286,33 @@ private fun NotesPage(
         }
     }
 
-    if (notes.isEmpty()) {
-        Text("No notes yet. Add your first note above.", color = muted)
+    if (editingId != null) {
+        Text("Editing note — tap Update Note to save your changes.", color = MaterialTheme.colorScheme.secondary)
     }
 
-    notes.toList().asReversed().forEach { note ->
+    OutlinedTextField(
+        value = searchQuery,
+        onValueChange = { searchQuery = it },
+        label = { Text("Search saved notes") },
+        placeholder = { Text("Search title or note text") },
+        modifier = Modifier.fillMaxWidth(),
+        singleLine = true
+    )
+
+    val visibleNotes = notes.toList().asReversed().filter { note ->
+        searchQuery.isBlank() || note.title.contains(searchQuery, ignoreCase = true) ||
+            note.body.contains(searchQuery, ignoreCase = true)
+    }
+
+    if (notes.isEmpty()) {
+        Text("No notes yet. Add your first note above.", color = muted)
+    } else if (visibleNotes.isEmpty()) {
+        Text("No notes match your search.", color = muted)
+    } else {
+        Text("${visibleNotes.size} note${if (visibleNotes.size == 1) "" else "s"}", color = muted)
+    }
+
+    visibleNotes.forEach { note ->
         Card(
             modifier = Modifier.fillMaxWidth(),
             colors = CardDefaults.cardColors(
