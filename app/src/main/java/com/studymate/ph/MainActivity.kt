@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -40,7 +41,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 private enum class Screen {
-    HOME, SUBJECTS, SEARCH, QUIZ, LEVEL_UP, LEVEL_COMPLETE, GAME_OVER, NOTES, FLASHCARDS, DICTIONARY, TIMER, PROGRESS, REVIEW, PROFILE, SHOP, SETTINGS
+    HOME, SUBJECTS, SEARCH, QUIZ, LEVEL_UP, LEVEL_COMPLETE, GAME_OVER, NOTES, FLASHCARDS, DICTIONARY, VOCABULARY, TIMER, PROGRESS, REVIEW, PROFILE, SHOP, SETTINGS
 }
 
 private data class Note(val id: Long, val title: String, val body: String)
@@ -956,6 +957,27 @@ private fun StudyMateApp() {
                                 onClick = { screen = Screen.SEARCH.name }
                             )
                         }
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            HomeShortcutTile(
+                                modifier = Modifier.weight(1f),
+                                icon = "🧠",
+                                title = "Vocabulary Builder",
+                                subtitle = "Learn & save words",
+                                accent = Color(0xFFFF78C8),
+                                onClick = { screen = Screen.VOCABULARY.name }
+                            )
+                            HomeShortcutTile(
+                                modifier = Modifier.weight(1f),
+                                icon = "📚",
+                                title = "Word Practice",
+                                subtitle = "Review saved words",
+                                accent = Color(0xFF9D8CFF),
+                                onClick = { screen = Screen.VOCABULARY.name }
+                            )
+                        }
 
                         if (quizPaused && questions.isNotEmpty() && !quizResultSaved) {
                             Card(
@@ -1131,6 +1153,10 @@ private fun StudyMateApp() {
 
                     Screen.DICTIONARY -> {
                         DictionaryPage()
+                    }
+
+                    Screen.VOCABULARY -> {
+                        VocabularyBuilderPage()
                     }
 
                     Screen.FLASHCARDS -> {
@@ -1622,7 +1648,9 @@ private fun StudyMateModals(
 private data class DictionaryEntry(
     val english: String,
     val tagalog: String,
-    val meaning: String
+    val meaning: String,
+    val category: String = "General",
+    val example: String = ""
 )
 
 private val tagalogEnglishWords = listOf(
@@ -1693,7 +1721,148 @@ private val tagalogEnglishWords = listOf(
     DictionaryEntry("why", "bakit", "Used to ask for a reason."),
     DictionaryEntry("what", "ano", "Used to ask about a thing or idea."),
     DictionaryEntry("who", "sino", "Used to ask about a person."),
-    DictionaryEntry("how", "paano", "Used to ask about a method or way.")
+    DictionaryEntry("how", "paano", "Used to ask about a method or way."),
+    DictionaryEntry("abandon", "iwanan / talikuran", "To leave someone or something behind.", "Actions", "Do not abandon your goals. — Huwag talikuran ang iyong mga pangarap."),
+    DictionaryEntry("ability", "kakayahan", "The skill or power to do something.", "Learning", "Practice improves your ability. — Pinauunlad ng pagsasanay ang iyong kakayahan."),
+    DictionaryEntry("accept", "tanggapin", "To receive or agree to something.", "Actions", "Accept helpful advice. — Tanggapin ang kapaki-pakinabang na payo."),
+    DictionaryEntry("achieve", "makamit", "To succeed in reaching a goal.", "Learning", "You can achieve your goals. — Makakamit mo ang iyong mga layunin."),
+    DictionaryEntry("active", "aktibo / masigla", "Doing things with energy.", "People", "Stay active every day. — Manatiling aktibo araw-araw."),
+    DictionaryEntry("advice", "payo", "A suggestion about what someone should do.", "People", "Thank you for your advice. — Salamat sa iyong payo."),
+    DictionaryEntry("afraid", "natatakot", "Feeling fear.", "Feelings", "She is afraid of storms. — Natatakot siya sa mga bagyo."),
+    DictionaryEntry("allow", "payagan", "To let something happen.", "Actions", "Allow yourself to learn. — Payagan ang sarili na matuto."),
+    DictionaryEntry("almost", "halos", "Nearly, but not completely.", "General", "I am almost ready. — Halos handa na ako."),
+    DictionaryEntry("ancient", "sinauna", "Very old; from a long time ago.", "Time & Nature", "We studied ancient history. — Pinag-aralan namin ang sinaunang kasaysayan."),
+    DictionaryEntry("angry", "galit", "Feeling strong displeasure.", "Feelings", "He is angry about the mistake. — Galit siya sa pagkakamali."),
+    DictionaryEntry("animal", "hayop", "A living creature that is not a plant.", "Nature", "The animal needs water. — Kailangan ng hayop ng tubig."),
+    DictionaryEntry("arrive", "dumating", "To reach a place.", "Actions", "We arrive at school early. — Maaga kaming dumarating sa paaralan."),
+    DictionaryEntry("ask", "magtanong / hingin", "To request information or something.", "Actions", "Ask your teacher. — Magtanong sa iyong guro."),
+    DictionaryEntry("begin", "simulan", "To start something.", "Actions", "Begin with one small step. — Magsimula sa isang maliit na hakbang."),
+    DictionaryEntry("believe", "maniwala", "To accept something as true.", "Mind", "Believe in your ability. — Maniwala sa iyong kakayahan."),
+    DictionaryEntry("borrow", "humiram", "To use something and return it later.", "Actions", "May I borrow your book? — Maaari ba akong humiram ng iyong aklat?"),
+    DictionaryEntry("careful", "maingat", "Taking care to avoid danger or mistakes.", "People", "Be careful on the road. — Mag-ingat sa daan."),
+    DictionaryEntry("choose", "pumili", "To decide which thing you want.", "Actions", "Choose the correct answer. — Piliin ang tamang sagot."),
+    DictionaryEntry("clever", "matalino / madiskarte", "Quick to understand or solve problems.", "People", "That was a clever idea. — Matalinong ideya iyon."),
+    DictionaryEntry("compare", "ihambing", "To look at similarities and differences.", "Learning", "Compare the two answers. — Ihambing ang dalawang sagot."),
+    DictionaryEntry("complete", "kumpletuhin / buo", "To finish or have all parts.", "Actions", "Complete your homework. — Kumpletuhin ang iyong takdang-aralin."),
+    DictionaryEntry("confident", "may tiwala sa sarili", "Believing in your own abilities.", "Feelings", "Be confident when speaking. — Magtiwala sa sarili kapag nagsasalita."),
+    DictionaryEntry("create", "lumikha / gumawa", "To make something new.", "Actions", "Create a study plan. — Gumawa ng plano sa pag-aaral."),
+    DictionaryEntry("curious", "mausisa", "Eager to learn or know something.", "Feelings", "Curious students ask questions. — Nagtatanong ang mga mausisang mag-aaral."),
+    DictionaryEntry("danger", "panganib", "The possibility of harm or injury.", "Safety", "Stay away from danger. — Lumayo sa panganib."),
+    DictionaryEntry("decide", "magpasya", "To make a choice.", "Mind", "Decide after thinking carefully. — Magpasya matapos mag-isip nang mabuti."),
+    DictionaryEntry("different", "magkaiba / naiiba", "Not the same.", "General", "We have different opinions. — Magkaiba ang aming mga opinyon."),
+    DictionaryEntry("discover", "matuklasan", "To find something for the first time.", "Learning", "Discover a new word today. — Tumuklas ng bagong salita ngayon."),
+    DictionaryEntry("early", "maaga", "Before the expected time.", "Time & Nature", "I wake up early. — Maaga akong gumigising."),
+    DictionaryEntry("effort", "pagsisikap", "An attempt that uses energy.", "Learning", "Your effort matters. — Mahalaga ang iyong pagsisikap."),
+    DictionaryEntry("enough", "sapat", "As much as needed.", "General", "We have enough time. — May sapat tayong oras."),
+    DictionaryEntry("environment", "kapaligiran", "The surroundings in which people or things live.", "Nature", "Protect the environment. — Protektahan ang kapaligiran."),
+    DictionaryEntry("example", "halimbawa", "Something that helps explain a rule or idea.", "Learning", "Give one example. — Magbigay ng isang halimbawa."),
+    DictionaryEntry("excited", "nasasabik", "Very happy and enthusiastic.", "Feelings", "I am excited to learn. — Nasasabik akong matuto."),
+    DictionaryEntry("explain", "ipaliwanag", "To make an idea clear.", "Learning", "Please explain your answer. — Pakipaliwanag ang iyong sagot."),
+    DictionaryEntry("fair", "patas", "Treating people equally and reasonably.", "People", "Everyone deserves a fair chance. — Karapat-dapat ang lahat sa patas na pagkakataon."),
+    DictionaryEntry("famous", "sikat", "Known by many people.", "People", "The author is famous. — Sikat ang may-akda."),
+    DictionaryEntry("fear", "takot", "An unpleasant feeling caused by danger.", "Feelings", "Face your fear slowly. — Harapin ang iyong takot nang paunti-unti."),
+    DictionaryEntry("follow", "sumunod / sundan", "To go after or act according to instructions.", "Actions", "Follow the instructions. — Sundin ang mga tagubilin."),
+    DictionaryEntry("forgive", "magpatawad", "To stop feeling anger toward someone.", "Feelings", "It can be hard to forgive. — Maaaring mahirap magpatawad."),
+    DictionaryEntry("future", "hinaharap", "The time that has not happened yet.", "Time & Nature", "Prepare for the future. — Maghanda para sa hinaharap."),
+    DictionaryEntry("goal", "layunin / mithiin", "Something you want to achieve.", "Learning", "Set a clear goal. — Magtakda ng malinaw na layunin."),
+    DictionaryEntry("grateful", "mapagpasalamat", "Feeling thankful.", "Feelings", "I am grateful for your help. — Mapagpasalamat ako sa iyong tulong."),
+    DictionaryEntry("healthy", "malusog", "In good physical or mental condition.", "Health", "Eat healthy food. — Kumain ng masustansyang pagkain."),
+    DictionaryEntry("improve", "pagbutihin / pagbuti", "To make or become better.", "Learning", "Practice to improve your English. — Magsanay upang pagbutihin ang iyong English."),
+    DictionaryEntry("include", "isama", "To make something part of a group.", "Actions", "Include everyone in the game. — Isama ang lahat sa laro."),
+    DictionaryEntry("increase", "dagdagan / tumaas", "To become or make greater.", "General", "Reading can increase your vocabulary. — Maaaring palawakin ng pagbabasa ang iyong bokabularyo."),
+    DictionaryEntry("journey", "paglalakbay", "Travel from one place to another; a process of change.", "Travel", "Learning is a journey. — Ang pagkatuto ay isang paglalakbay."),
+    DictionaryEntry("justice", "katarungan", "Fair treatment according to what is right.", "Society", "People seek justice. — Naghahanap ng katarungan ang mga tao."),
+    DictionaryEntry("knowledgeable", "maraming nalalaman", "Having a lot of knowledge.", "Learning", "She is knowledgeable about history. — Marami siyang nalalaman tungkol sa kasaysayan."),
+    DictionaryEntry("leader", "pinuno", "A person who guides a group.", "People", "A good leader listens. — Nakikinig ang mabuting pinuno."),
+    DictionaryEntry("lesson", "aralin", "Something taught or learned.", "Learning", "Review today's lesson. — Balikan ang aralin ngayong araw."),
+    DictionaryEntry("mistake", "pagkakamali", "Something that is incorrect.", "Learning", "Learn from every mistake. — Matuto sa bawat pagkakamali."),
+    DictionaryEntry("necessary", "kinakailangan", "Needed or required.", "General", "Sleep is necessary for health. — Kailangan ang tulog para sa kalusugan."),
+    DictionaryEntry("opportunity", "pagkakataon", "A suitable time or chance to do something.", "General", "Use every opportunity to learn. — Gamitin ang bawat pagkakataong matuto."),
+    DictionaryEntry("patient", "matiyaga / mapagpasensya", "Able to wait calmly; a person receiving medical care.", "People", "Be patient with yourself. — Maging matiyaga sa iyong sarili."),
+    DictionaryEntry("peaceful", "mapayapa", "Calm and free from conflict.", "Feelings", "The village is peaceful. — Mapayapa ang nayon."),
+    DictionaryEntry("prepare", "maghanda", "To get ready for something.", "Actions", "Prepare for your exam. — Maghanda para sa iyong pagsusulit."),
+    DictionaryEntry("protect", "protektahan", "To keep someone or something safe.", "Safety", "Protect your personal information. — Protektahan ang iyong personal na impormasyon."),
+    DictionaryEntry("purpose", "layunin", "The reason something is done.", "Mind", "What is the purpose of this task? — Ano ang layunin ng gawaing ito?"),
+    DictionaryEntry("quiet", "tahimik", "Making little or no noise.", "General", "Find a quiet place to study. — Humanap ng tahimik na lugar para mag-aral."),
+    DictionaryEntry("remember", "alalahanin / tandaan", "To keep something in your mind.", "Mind", "Remember these new words. — Tandaan ang mga bagong salitang ito."),
+    DictionaryEntry("responsible", "responsable / may pananagutan", "Able to be trusted to do what is expected.", "People", "Be responsible for your work. — Maging responsable sa iyong gawain."),
+    DictionaryEntry("safe", "ligtas", "Protected from harm or danger.", "Safety", "Keep your account safe. — Panatilihing ligtas ang iyong account."),
+    DictionaryEntry("share", "ibahagi", "To give part of something to others.", "Actions", "Share your knowledge. — Ibahagi ang iyong kaalaman."),
+    DictionaryEntry("solution", "solusyon", "An answer to a problem.", "Learning", "Find a solution together. — Humanap ng solusyon nang magkakasama."),
+    DictionaryEntry("success", "tagumpay", "The achievement of a goal.", "Learning", "Success takes practice. — Kailangan ng pagsasanay upang magtagumpay."),
+    DictionaryEntry("thoughtful", "maalalahanin", "Showing care by thinking about others.", "People", "That was a thoughtful gift. — Isa iyong maalalahaning regalo."),
+    DictionaryEntry("travel", "maglakbay", "To go from one place to another.", "Travel", "We travel by bus. — Naglalakbay kami sakay ng bus."),
+    DictionaryEntry("useful", "kapaki-pakinabang", "Helpful for a purpose.", "General", "This dictionary is useful. — Kapaki-pakinabang ang diksyunaryong ito."),
+    DictionaryEntry("value", "halaga", "The worth or importance of something.", "General", "Know the value of your time. — Alamin ang halaga ng iyong oras."),
+    DictionaryEntry("wise", "marunong / matalino", "Showing good judgment.", "People", "Make a wise decision. — Gumawa ng matalinong pasya."),
+    DictionaryEntry("wonder", "magtaka / kamanghaan", "To feel curiosity or amazement.", "Feelings", "I wonder how it works. — Nagtataka ako kung paano ito gumagana."),
+    DictionaryEntry("youth", "kabataan", "The period of being young; young people.", "People", "Education helps the youth. — Tinutulungan ng edukasyon ang kabataan."),
+    DictionaryEntry("zero", "sero / wala", "The number 0; nothing.", "Numbers", "Zero is less than one. — Mas mababa ang sero kaysa isa."),
+    DictionaryEntry("above", "sa itaas", "In a higher place or position.", "Places", "The lamp is above the table. — Nasa itaas ng mesa ang ilaw."),
+    DictionaryEntry("behind", "sa likod", "At the back of something.", "Places", "The bag is behind the chair. — Nasa likod ng upuan ang bag."),
+    DictionaryEntry("between", "sa pagitan", "In the space separating two things.", "Places", "Sit between your friends. — Umupo sa pagitan ng iyong mga kaibigan."),
+    DictionaryEntry("inside", "sa loob", "In the inner part of something.", "Places", "The keys are inside the bag. — Nasa loob ng bag ang mga susi."),
+    DictionaryEntry("outside", "sa labas", "Not inside a building or space.", "Places", "Wait outside the room. — Maghintay sa labas ng silid."),
+    DictionaryEntry("rain", "ulan", "Water falling from clouds.", "Nature", "The rain is heavy. — Malakas ang ulan."),
+    DictionaryEntry("river", "ilog", "A large natural stream of water.", "Nature", "The river flows to the sea. — Dumadaloy ang ilog patungo sa dagat."),
+    DictionaryEntry("mountain", "bundok", "A very high natural area of land.", "Nature", "The mountain is tall. — Mataas ang bundok."),
+    DictionaryEntry("weather", "panahon", "Conditions such as rain, wind, and temperature.", "Nature", "The weather is warm today. — Mainit ang panahon ngayon."),
+    DictionaryEntry("healthy", "malusog", "In good health.", "Health", "Exercise keeps the body healthy. — Pinananatiling malusog ng ehersisyo ang katawan."),
+    DictionaryEntry("medicine", "gamot", "A substance used to treat illness.", "Health", "Take medicine as directed. — Inumin ang gamot ayon sa tagubilin."),
+    DictionaryEntry("pain", "sakit", "An unpleasant physical feeling.", "Health", "Tell an adult if you feel pain. — Sabihan ang nakatatanda kung nakakaramdam ka ng sakit."),
+    DictionaryEntry("breakfast", "almusal", "The first meal of the day.", "Food", "I eat breakfast at seven. — Kumakain ako ng almusal nang alas-siyete."),
+    DictionaryEntry("vegetable", "gulay", "An edible plant or part of a plant.", "Food", "Eat vegetables every day. — Kumain ng gulay araw-araw."),
+    DictionaryEntry("fruit", "prutas", "The edible part of a plant that often contains seeds.", "Food", "Mango is a sweet fruit. — Matamis na prutas ang mangga."),
+    DictionaryEntry("hungry", "gutom", "Needing or wanting food.", "Food", "I am hungry. — Gutom ako."),
+    DictionaryEntry("thirsty", "uhaw", "Needing a drink.", "Food", "Drink water when you are thirsty. — Uminom ng tubig kapag nauuhaw."),
+    DictionaryEntry("expensive", "mahal", "Costing a lot of money.", "Shopping", "That phone is expensive. — Mahal ang teleponong iyon."),
+    DictionaryEntry("cheap", "mura", "Low in price.", "Shopping", "This notebook is cheap. — Mura ang kuwadernong ito."),
+    DictionaryEntry("money", "pera", "Something used to pay for goods and services.", "Shopping", "Save your money. — Mag-ipon ng pera."),
+    DictionaryEntry("price", "presyo", "The amount of money something costs.", "Shopping", "Check the price first. — Tingnan muna ang presyo."),
+    DictionaryEntry("buy", "bumili", "To get something by paying money.", "Shopping", "I want to buy a book. — Gusto kong bumili ng aklat."),
+    DictionaryEntry("sell", "magbenta", "To give something in exchange for money.", "Shopping", "They sell fresh fruit. — Nagbebenta sila ng sariwang prutas."),
+    DictionaryEntry("care", "pag-aalaga / malasakit", "Attention or concern for someone or something.", "People", "Show care for others. — Magpakita ng malasakit sa iba."),
+    DictionaryEntry("community", "pamayanan", "A group of people living in the same area.", "Society", "Our community works together. — Nagtutulungan ang aming pamayanan."),
+    DictionaryEntry("culture", "kultura", "The customs and way of life of a group.", "Society", "Learn about Filipino culture. — Matuto tungkol sa kulturang Pilipino."),
+    DictionaryEntry("freedom", "kalayaan", "The ability to act or speak without unfair control.", "Society", "Freedom comes with responsibility. — May kaakibat na pananagutan ang kalayaan."),
+    DictionaryEntry("law", "batas", "A rule made by an authority.", "Society", "Everyone must follow the law. — Dapat sundin ng lahat ang batas."),
+    DictionaryEntry("peace", "kapayapaan", "A state without war or conflict.", "Society", "We hope for peace. — Umaasa kami sa kapayapaan."),
+    DictionaryEntry("science", "agham", "The study of the natural world.", "School", "Science explains many natural events. — Ipinaliliwanag ng agham ang maraming pangyayari sa kalikasan."),
+    DictionaryEntry("history", "kasaysayan", "The study or record of past events.", "School", "History teaches us about the past. — Itinuturo sa atin ng kasaysayan ang nakaraan."),
+    DictionaryEntry("mathematics", "matematika", "The study of numbers, shapes, and patterns.", "School", "Mathematics develops problem-solving skills. — Pinauunlad ng matematika ang kakayahang lumutas ng problema."),
+    DictionaryEntry("library", "aklatan", "A place where books and learning materials are kept.", "School", "Study in the library. — Mag-aral sa aklatan."),
+    DictionaryEntry("exam", "pagsusulit", "A test of knowledge or skill.", "School", "Review before the exam. — Magbalik-aral bago ang pagsusulit."),
+    DictionaryEntry("grade", "marka / baitang", "A score for schoolwork or a level in school.", "School", "Check your grade. — Tingnan ang iyong marka."),
+    DictionaryEntry("homework", "takdang-aralin", "Schoolwork to be completed outside class.", "School", "Finish your homework. — Tapusin ang iyong takdang-aralin."),
+    DictionaryEntry("computer", "kompyuter", "An electronic device that processes information.", "Technology", "Use the computer carefully. — Gamitin nang maingat ang kompyuter."),
+    DictionaryEntry("internet", "internet", "A global network connecting computers and devices.", "Technology", "The internet provides information. — Nagbibigay ng impormasyon ang internet."),
+    DictionaryEntry("password", "password / salitang-panseguridad", "A secret string used to access an account.", "Technology", "Never share your password. — Huwag ibahagi ang iyong password."),
+    DictionaryEntry("message", "mensahe", "Information sent to someone.", "Technology", "I sent you a message. — Nagpadala ako sa iyo ng mensahe."),
+    DictionaryEntry("search", "maghanap / paghahanap", "To look for something.", "Technology", "Search for the word. — Hanapin ang salita."),
+    DictionaryEntry("beautiful", "maganda", "Pleasing to the senses or mind.", "Descriptions", "The garden is beautiful. — Maganda ang hardin."),
+    DictionaryEntry("bright", "maliwanag / matalino", "Giving much light; intelligent.", "Descriptions", "The room is bright. — Maliwanag ang silid."),
+    DictionaryEntry("dark", "madilim", "Having little or no light.", "Descriptions", "The sky is dark. — Madilim ang langit."),
+    DictionaryEntry("soft", "malambot", "Easy to press or not hard.", "Descriptions", "The pillow is soft. — Malambot ang unan."),
+    DictionaryEntry("hard", "matigas / mahirap", "Firm to touch; difficult to do.", "Descriptions", "This question is hard. — Mahirap ang tanong na ito."),
+    DictionaryEntry("warm", "mainit-init", "Slightly hot in a pleasant way.", "Descriptions", "The soup is warm. — Mainit-init ang sabaw."),
+    DictionaryEntry("cold", "malamig", "Having a low temperature.", "Descriptions", "The water is cold. — Malamig ang tubig."),
+    DictionaryEntry("near", "malapit", "At a short distance.", "Places", "The school is near our house. — Malapit ang paaralan sa aming bahay."),
+    DictionaryEntry("far", "malayo", "At a great distance.", "Places", "The market is far away. — Malayo ang palengke."),
+    DictionaryEntry("always", "palagi", "At all times.", "Time & Nature", "Always tell the truth. — Palaging magsabi ng totoo."),
+    DictionaryEntry("sometimes", "minsan", "On some occasions, but not always.", "Time & Nature", "I sometimes read at night. — Minsan akong nagbabasa sa gabi."),
+    DictionaryEntry("never", "hindi kailanman", "Not at any time.", "Time & Nature", "Never give up learning. — Huwag kailanman tumigil sa pagkatuto."),
+    DictionaryEntry("soon", "malapit na", "In a short time.", "Time & Nature", "The class will start soon. — Magsisimula na ang klase."),
+    DictionaryEntry("already", "na", "Before now or earlier than expected.", "Time & Nature", "I already finished. — Tapos na ako."),
+    DictionaryEntry("because", "dahil", "For the reason that.", "Connectors", "I study because I want to learn. — Nag-aaral ako dahil gusto kong matuto."),
+    DictionaryEntry("although", "bagaman / kahit na", "Despite the fact that.", "Connectors", "Although it rained, we went. — Kahit umulan, tumuloy kami."),
+    DictionaryEntry("however", "gayunman / subalit", "Used to introduce a contrast.", "Connectors", "It was difficult; however, we finished. — Mahirap ito; gayunman, natapos namin."),
+    DictionaryEntry("therefore", "samakatuwid / kaya", "For that reason.", "Connectors", "It was late; therefore, we went home. — Gabi na kaya umuwi kami."),
+    DictionaryEntry("together", "magkasama", "With one another.", "People", "Let us learn together. — Matuto tayo nang magkasama."),
+    DictionaryEntry("alone", "mag-isa", "Without other people.", "People", "She studied alone. — Nag-aral siya nang mag-isa."),
+    DictionaryEntry("polite", "magalang", "Showing good manners and respect.", "People", "Be polite to everyone. — Maging magalang sa lahat."),
+    DictionaryEntry("rude", "bastos", "Not showing respect or good manners.", "People", "That comment was rude. — Bastos ang komentong iyon."),
+    DictionaryEntry("trust", "tiwala / magtiwala", "Belief that someone is reliable.", "Feelings", "Trust takes time to build. — Nangangailangan ng panahon upang mabuo ang tiwala."),
+    DictionaryEntry("worry", "mag-alala", "To feel anxious about something.", "Feelings", "Do not worry too much. — Huwag masyadong mag-alala.")
 )
 
 @Composable
@@ -1759,6 +1928,108 @@ private fun DictionaryPage() {
             color = muted,
             style = MaterialTheme.typography.bodySmall
         )
+    }
+}
+
+@Composable
+private fun VocabularyBuilderPage() {
+    val context = LocalContext.current
+    val prefs = remember { context.getSharedPreferences("studymate_data", Context.MODE_PRIVATE) }
+    var query by rememberSaveable { mutableStateOf("") }
+    var selectedCategory by rememberSaveable { mutableStateOf("All") }
+    var showFavoritesOnly by rememberSaveable { mutableStateOf(false) }
+    val favorites = remember {
+        mutableStateListOf<String>().apply {
+            addAll(decodeStrings(prefs.getString("vocabularyFavorites", "[]") ?: "[]"))
+        }
+    }
+    val categories = remember { listOf("All") + tagalogEnglishWords.map { it.category }.distinct().sorted() }
+    val dailyIndex = remember { (java.time.LocalDate.now().dayOfYear - 1) % tagalogEnglishWords.size }
+    val wordOfTheDay = tagalogEnglishWords[dailyIndex]
+    val filteredWords = remember(query, selectedCategory, showFavoritesOnly, favorites.toList()) {
+        val normalized = query.trim().lowercase()
+        tagalogEnglishWords.filter { entry ->
+            val matchesQuery = normalized.isBlank() || entry.english.lowercase().contains(normalized) ||
+                entry.tagalog.lowercase().contains(normalized) || entry.meaning.lowercase().contains(normalized) ||
+                entry.example.lowercase().contains(normalized)
+            val matchesCategory = selectedCategory == "All" || entry.category == selectedCategory
+            val matchesFavorites = !showFavoritesOnly || entry.english in favorites
+            matchesQuery && matchesCategory && matchesFavorites
+        }.sortedBy { it.english }
+    }
+
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        Heading("🧠 Vocabulary Builder", "Build your Tagalog–English vocabulary with meanings, categories, and example sentences.")
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(22.dp),
+            colors = CardDefaults.cardColors(containerColor = panel),
+            border = androidx.compose.foundation.BorderStroke(1.dp, pink.copy(alpha = 0.45f))
+        ) {
+            Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                Text("🌟 WORD OF THE DAY", color = pink, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.ExtraBold)
+                Text(wordOfTheDay.english.replaceFirstChar { it.uppercase() }, color = cyan, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.ExtraBold)
+                Text("Tagalog: ${wordOfTheDay.tagalog}", color = pink, fontWeight = FontWeight.Bold)
+                Text(wordOfTheDay.meaning, color = muted)
+                if (wordOfTheDay.example.isNotBlank()) Text("Example: ${wordOfTheDay.example}", color = Color(0xFFE6F7FF), style = MaterialTheme.typography.bodySmall)
+                TextButton(onClick = {
+                    if (wordOfTheDay.english !in favorites) favorites.add(wordOfTheDay.english)
+                    else favorites.remove(wordOfTheDay.english)
+                    prefs.edit().putString("vocabularyFavorites", encodeStrings(favorites.toList())).apply()
+                }) { Text(if (wordOfTheDay.english in favorites) "★ Saved to Favorites" else "☆ Save Word") }
+            }
+        }
+        OutlinedTextField(
+            value = query,
+            onValueChange = { query = it },
+            modifier = Modifier.fillMaxWidth(),
+            label = { Text("Search English, Tagalog, or meaning") },
+            placeholder = { Text("e.g. grateful, pasasalamat, school") },
+            singleLine = true,
+            trailingIcon = { if (query.isNotBlank()) TextButton(onClick = { query = "" }) { Text("Clear") } }
+        )
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FilterChip(selected = !showFavoritesOnly, onClick = { showFavoritesOnly = false }, label = { Text("All Words") })
+            FilterChip(selected = showFavoritesOnly, onClick = { showFavoritesOnly = true }, label = { Text("★ Favorites (${favorites.size})") })
+        }
+        Text("Categories", color = muted, fontWeight = FontWeight.Bold)
+        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            categories.forEach { category ->
+                FilterChip(selected = selectedCategory == category, onClick = { selectedCategory = category }, label = { Text(category) })
+            }
+        }
+        Text("${filteredWords.size} words available • ${tagalogEnglishWords.size} built-in entries", color = muted, style = MaterialTheme.typography.bodySmall)
+        if (filteredWords.isEmpty()) {
+            CardBox("No matching words", "Try another search, select All categories, or save some words to Favorites.") {}
+        } else {
+            filteredWords.forEach { entry ->
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(20.dp),
+                    colors = CardDefaults.cardColors(containerColor = panel),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, if (entry.english in favorites) pink.copy(alpha = 0.55f) else cyan.copy(alpha = 0.22f))
+                ) {
+                    Column(Modifier.fillMaxWidth().padding(15.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Column(Modifier.weight(1f)) {
+                                Text(entry.english.replaceFirstChar { it.uppercase() }, color = cyan, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.ExtraBold)
+                                Text("Tagalog: ${entry.tagalog}", color = pink, fontWeight = FontWeight.Bold)
+                            }
+                            TextButton(onClick = {
+                                if (entry.english in favorites) favorites.remove(entry.english) else favorites.add(entry.english)
+                                prefs.edit().putString("vocabularyFavorites", encodeStrings(favorites.toList())).apply()
+                            }) { Text(if (entry.english in favorites) "★" else "☆") }
+                        }
+                        Text(entry.meaning, color = muted, style = MaterialTheme.typography.bodyMedium)
+                        if (entry.example.isNotBlank()) Text("Example: ${entry.example}", color = Color(0xFFE6F7FF), style = MaterialTheme.typography.bodySmall)
+                        Surface(color = purple.copy(alpha = 0.13f), shape = RoundedCornerShape(10.dp)) {
+                            Text(entry.category, modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp), color = purple, style = MaterialTheme.typography.labelSmall)
+                        }
+                    }
+                }
+            }
+        }
+        Text("This is an expandable starter collection, not every Tagalog and English word in the world. Translations can vary by context; more entries can be added in future updates.", color = muted, style = MaterialTheme.typography.bodySmall)
     }
 }
 
