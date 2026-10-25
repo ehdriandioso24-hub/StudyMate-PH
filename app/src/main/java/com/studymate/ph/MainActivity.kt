@@ -76,12 +76,12 @@ private data class BankItem(
     val type: String = "Multiple Choice"
 )
 
-private val bg = Color(0xFF07111F)
-private val panel = Color(0xFF111C30)
-private val purple = Color(0xFF9B7BFF)
-private val pink = Color(0xFFFF72C6)
-private val cyan = Color(0xFF35D7F2)
-private val muted = Color(0xFFB4C2D8)
+private val bg = Color(0xFF070D1A)
+private val panel = Color(0xFF101A2D)
+private val purple = Color(0xFF9D8CFF)
+private val pink = Color(0xFFFF78C8)
+private val cyan = Color(0xFF48E0F0)
+private val muted = Color(0xFFB8C7DC)
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -90,11 +90,11 @@ class MainActivity : ComponentActivity() {
         val appPrefs = getSharedPreferences("studymate_data", Context.MODE_PRIVATE)
         setContent {
             val appColors = darkColorScheme(
-                primary = Color(0xFF9B7BFF),
-                secondary = Color(0xFF35D7F2),
-                tertiary = Color(0xFFFF72C6),
-                background = Color(0xFF07111F),
-                surface = Color(0xFF111C30),
+                primary = Color(0xFF9D8CFF),
+                secondary = Color(0xFF48E0F0),
+                tertiary = Color(0xFFFF78C8),
+                background = Color(0xFF070D1A),
+                surface = Color(0xFF101A2D),
                 onPrimary = Color(0xFF100A25),
                 onBackground = Color(0xFFE6F7FF),
                 onSurface = Color(0xFFE6F7FF)
@@ -102,11 +102,11 @@ class MainActivity : ComponentActivity() {
             MaterialTheme(
                 colorScheme = appColors,
                 shapes = Shapes(
-                    extraSmall = RoundedCornerShape(8.dp),
-                    small = RoundedCornerShape(12.dp),
-                    medium = RoundedCornerShape(16.dp),
-                    large = RoundedCornerShape(22.dp),
-                    extraLarge = RoundedCornerShape(28.dp)
+                    extraSmall = RoundedCornerShape(10.dp),
+                    small = RoundedCornerShape(14.dp),
+                    medium = RoundedCornerShape(18.dp),
+                    large = RoundedCornerShape(24.dp),
+                    extraLarge = RoundedCornerShape(30.dp)
                 )
             ) {
                 Surface(
@@ -1941,8 +1941,8 @@ private fun Heading(title: String, subtitle: String) {
         Text(
             title,
             style = MaterialTheme.typography.titleLarge,
-            color = MaterialTheme.colorScheme.primary,
-            fontWeight = FontWeight.Bold
+            color = MaterialTheme.colorScheme.secondary,
+            fontWeight = FontWeight.ExtraBold
         )
         Text(subtitle, color = muted)
     }
@@ -1950,36 +1950,45 @@ private fun Heading(title: String, subtitle: String) {
 
 @Composable
 private fun CardBox(title: String, subtitle: String, onClick: () -> Unit = {}) {
-    val accent = if (title.contains("🔥") || title.contains("Daily")) Color(0xFFF59E0B)
-        else if (title.contains("🛒") || title.contains("Coins")) Color(0xFF06B6D4)
-        else Color(0xFF8B5CF6)
+    val accent = when {
+        title.contains("🔥") || title.contains("Daily") -> Color(0xFFFFC45C)
+        title.contains("🛒") || title.contains("Coins") -> cyan
+        title.contains("🏆") || title.contains("Level") -> pink
+        else -> purple
+    }
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick),
-        shape = MaterialTheme.shapes.large,
-        border = androidx.compose.foundation.BorderStroke(1.dp, accent.copy(alpha = 0.28f)),
+        shape = RoundedCornerShape(22.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, accent.copy(alpha = 0.38f)),
+        elevation = CardDefaults.cardElevation(defaultElevation = 3.dp, pressedElevation = 7.dp),
         colors = CardDefaults.cardColors(containerColor = Color.Transparent)
     ) {
-        Box(
-            Modifier
+        Row(
+            modifier = Modifier
                 .fillMaxWidth()
                 .background(
-                    Brush.linearGradient(
-                        listOf(
-                            Color(0xFF172238).copy(alpha = 0.98f),
-                            Color(0xFF131D35).copy(alpha = 0.96f),
-                            Color(0xFF0E1728).copy(alpha = 0.99f)
-                        )
+                    Brush.horizontalGradient(
+                        listOf(accent.copy(alpha = 0.13f), Color(0xFF121D32), Color(0xFF0B1425))
                     )
                 )
+                .padding(16.dp),
+            verticalAlignment = Alignment.Top,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Column(
-                Modifier.padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                Text(subtitle, color = muted)
+            Box(
+                Modifier
+                    .width(4.dp)
+                    .heightIn(min = 34.dp)
+                    .background(
+                        Brush.verticalGradient(listOf(accent, accent.copy(alpha = 0.22f))),
+                        RoundedCornerShape(8.dp)
+                    )
+            )
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Color(0xFFF2F7FF))
+                Text(subtitle, color = muted, style = MaterialTheme.typography.bodyMedium)
             }
         }
     }
@@ -1996,10 +2005,10 @@ private fun HomeShortcutTile(
 ) {
     Surface(
         modifier = modifier.clickable(onClick = onClick),
-        shape = RoundedCornerShape(20.dp),
-        color = Color(0xFF111C30),
-        border = androidx.compose.foundation.BorderStroke(1.dp, accent.copy(alpha = 0.58f)),
-        shadowElevation = 4.dp
+        shape = RoundedCornerShape(24.dp),
+        color = Color(0xFF101A2D),
+        border = androidx.compose.foundation.BorderStroke(1.dp, accent.copy(alpha = 0.62f)),
+        shadowElevation = 7.dp
     ) {
         Row(
             modifier = Modifier
@@ -2009,7 +2018,7 @@ private fun HomeShortcutTile(
                         listOf(accent.copy(alpha = 0.16f), Color(0xFF111C30), Color(0xFF0D1729))
                     )
                 )
-                .padding(horizontal = 12.dp, vertical = 15.dp),
+                .padding(horizontal = 14.dp, vertical = 17.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
@@ -2021,7 +2030,7 @@ private fun HomeShortcutTile(
                 Text(icon, modifier = Modifier.padding(9.dp), style = MaterialTheme.typography.titleMedium)
             }
             Column(modifier = Modifier.weight(1f)) {
-                Text(title, fontWeight = FontWeight.ExtraBold, color = Color(0xFFEAF7FF), style = MaterialTheme.typography.titleSmall)
+                Text(title, fontWeight = FontWeight.ExtraBold, color = Color(0xFFF3F8FF), style = MaterialTheme.typography.titleSmall)
                 Spacer(Modifier.height(3.dp))
                 Text(subtitle, color = muted, style = MaterialTheme.typography.labelSmall)
             }
