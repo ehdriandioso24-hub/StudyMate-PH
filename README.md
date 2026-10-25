@@ -8,7 +8,7 @@ StudyMate PH is an Android study companion designed to help students organize th
 
 Latest Release: v1.0.0
 
-"Download StudyMate PH for Android" (ILAGAY_DITO_ANG_RELEASE_URL)
+"Download StudyMate PH for Android" (https://github.com/ehdriandioso24-hub/StudyMate-PH/releases/tag/v1.0.0)
 
 ✨ Features
 
