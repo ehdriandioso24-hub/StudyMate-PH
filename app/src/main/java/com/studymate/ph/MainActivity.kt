@@ -683,7 +683,18 @@ private fun StudyMateApp() {
             val speedBonus = (secondsLeft * 2).coerceAtLeast(0)
             val comboBonus = if (streak >= 5) 100 else if (streak >= 3) 50 else 0
             quizScore += 100 + speedBonus + comboBonus
-            coins += 10
+            // Standard reward: 5 coins per correct answer.
+            coins += 5
+            // One-time milestone rewards for this active streak; equality prevents repeated payouts.
+            if (streak == 5) {
+                coins += 10
+                playSfx("coin", coinVolume)
+                android.widget.Toast.makeText(context, "5-win streak! +10 bonus coins 🎉", android.widget.Toast.LENGTH_LONG).show()
+            } else if (streak == 10) {
+                coins += 20
+                playSfx("coin", coinVolume)
+                android.widget.Toast.makeText(context, "10-win streak! +20 bonus coins 🏆", android.widget.Toast.LENGTH_LONG).show()
+            }
         } else {
             playSfx("wrong", wrongVolume)
             if (tickingSound) runCatching { toneGenerator.startTone(ToneGenerator.TONE_PROP_NACK, 160) }
@@ -3399,7 +3410,8 @@ private fun DictionaryPage() {
         if (filteredWords.isEmpty()) {
             CardBox("No matching word", "Try another spelling or search using the English or Tagalog word.") {}
         } else {
-            filteredWords.forEach { entry ->
+            // Keep the screen responsive: do not compose the entire large offline dictionary at once.
+            filteredWords.take(40).forEach { entry ->
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(20.dp),
@@ -3416,6 +3428,9 @@ private fun DictionaryPage() {
                     }
                 }
             }
+        }
+        if (filteredWords.size > 40) {
+            Text("Showing the first 40 matches for better performance. Type a longer word to narrow the results.", color = muted, style = MaterialTheme.typography.bodySmall)
         }
         Text(
             "Note: This is an expanded offline starter dictionary, not every Tagalog and English word. Translations can vary by context and region.",
@@ -3496,7 +3511,8 @@ private fun VocabularyBuilderPage() {
         if (filteredWords.isEmpty()) {
             CardBox("No matching words", "Try another search, select All categories, or save some words to Favorites.") {}
         } else {
-            filteredWords.forEach { entry ->
+            // Limit visible cards so this page stays stable inside the app's scrolling container.
+            filteredWords.take(40).forEach { entry ->
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(20.dp),
@@ -3522,6 +3538,9 @@ private fun VocabularyBuilderPage() {
                     }
                 }
             }
+        }
+        if (filteredWords.size > 40) {
+            Text("Showing the first 40 matches for better performance. Search or choose a category to find more specific words.", color = muted, style = MaterialTheme.typography.bodySmall)
         }
         Text("This is an expandable starter collection, not every Tagalog and English word in the world. Translations can vary by context; more entries can be added in future updates.", color = muted, style = MaterialTheme.typography.bodySmall)
     }
