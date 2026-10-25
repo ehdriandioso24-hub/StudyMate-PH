@@ -40,7 +40,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 private enum class Screen {
-    HOME, SUBJECTS, SEARCH, QUIZ, LEVEL_UP, LEVEL_COMPLETE, GAME_OVER, NOTES, FLASHCARDS, TIMER, PROGRESS, REVIEW, PROFILE, SHOP, SETTINGS
+    HOME, SUBJECTS, SEARCH, QUIZ, LEVEL_UP, LEVEL_COMPLETE, GAME_OVER, NOTES, FLASHCARDS, DICTIONARY, TIMER, PROGRESS, REVIEW, PROFILE, SHOP, SETTINGS
 }
 
 private data class Note(val id: Long, val title: String, val body: String)
@@ -935,6 +935,28 @@ private fun StudyMateApp() {
                             )
                         }
 
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            HomeShortcutTile(
+                                modifier = Modifier.weight(1f),
+                                icon = "📖",
+                                title = "Dictionary",
+                                subtitle = "Tagalog ↔ English",
+                                accent = Color(0xFF48E0F0),
+                                onClick = { screen = Screen.DICTIONARY.name }
+                            )
+                            HomeShortcutTile(
+                                modifier = Modifier.weight(1f),
+                                icon = "🔎",
+                                title = "Search",
+                                subtitle = "Find quiz questions",
+                                accent = Color(0xFF9D8CFF),
+                                onClick = { screen = Screen.SEARCH.name }
+                            )
+                        }
+
                         if (quizPaused && questions.isNotEmpty() && !quizResultSaved) {
                             Card(
                                 modifier = Modifier.fillMaxWidth(),
@@ -1105,6 +1127,10 @@ private fun StudyMateApp() {
                                 prefs.edit().putString("notes", encodeNotes(notes)).apply()
                             }
                         )
+                    }
+
+                    Screen.DICTIONARY -> {
+                        DictionaryPage()
                     }
 
                     Screen.FLASHCARDS -> {
@@ -1589,6 +1615,149 @@ private fun StudyMateModals(
             dismissButton = {
                 TextButton(onClick = onSubjectDismiss) { Text("Cancel") }
             }
+        )
+    }
+}
+
+private data class DictionaryEntry(
+    val english: String,
+    val tagalog: String,
+    val meaning: String
+)
+
+private val tagalogEnglishWords = listOf(
+    DictionaryEntry("hello", "kumusta", "A greeting used when meeting someone."),
+    DictionaryEntry("good morning", "magandang umaga", "A greeting used in the morning."),
+    DictionaryEntry("good afternoon", "magandang hapon", "A greeting used in the afternoon."),
+    DictionaryEntry("good evening", "magandang gabi", "A greeting used in the evening."),
+    DictionaryEntry("thank you", "salamat", "Used to show gratitude."),
+    DictionaryEntry("please", "pakiusap / po", "A polite word or expression."),
+    DictionaryEntry("sorry", "pasensya na", "Used to apologize."),
+    DictionaryEntry("yes", "oo", "An affirmative answer."),
+    DictionaryEntry("no", "hindi", "A negative answer."),
+    DictionaryEntry("friend", "kaibigan", "A person you know and like."),
+    DictionaryEntry("family", "pamilya", "People related to one another."),
+    DictionaryEntry("home", "tahanan / bahay", "The place where someone lives."),
+    DictionaryEntry("school", "paaralan", "A place where people learn."),
+    DictionaryEntry("teacher", "guro", "A person who teaches."),
+    DictionaryEntry("student", "mag-aaral", "A person who studies."),
+    DictionaryEntry("book", "aklat / libro", "A set of written or printed pages."),
+    DictionaryEntry("word", "salita", "A unit of language with meaning."),
+    DictionaryEntry("language", "wika", "A system of communication."),
+    DictionaryEntry("learn", "matuto", "To gain knowledge or skill."),
+    DictionaryEntry("read", "magbasa", "To look at and understand written words."),
+    DictionaryEntry("write", "magsulat", "To form words using letters."),
+    DictionaryEntry("speak", "magsalita", "To say words aloud."),
+    DictionaryEntry("listen", "makinig", "To pay attention to sounds or speech."),
+    DictionaryEntry("understand", "maunawaan", "To know the meaning of something."),
+    DictionaryEntry("beautiful", "maganda", "Pleasing to look at."),
+    DictionaryEntry("happy", "masaya", "Feeling joy or pleasure."),
+    DictionaryEntry("sad", "malungkot", "Feeling unhappy."),
+    DictionaryEntry("kind", "mabait", "Friendly, caring, or considerate."),
+    DictionaryEntry("brave", "matapang", "Ready to face danger or difficulty."),
+    DictionaryEntry("honest", "matapat", "Truthful and fair."),
+    DictionaryEntry("help", "tulong / tumulong", "To make something easier for someone."),
+    DictionaryEntry("love", "pag-ibig / magmahal", "A strong feeling of care or affection."),
+    DictionaryEntry("respect", "paggalang / igalang", "To treat someone with consideration."),
+    DictionaryEntry("water", "tubig", "A clear liquid needed by living things."),
+    DictionaryEntry("food", "pagkain", "Things people or animals eat."),
+    DictionaryEntry("rice", "kanin / bigas", "Cooked rice is kanin; uncooked rice is bigas."),
+    DictionaryEntry("house", "bahay", "A building where people live."),
+    DictionaryEntry("time", "oras", "A measure of when events happen."),
+    DictionaryEntry("today", "ngayon", "The current day."),
+    DictionaryEntry("tomorrow", "bukas", "The day after today."),
+    DictionaryEntry("yesterday", "kahapon", "The day before today."),
+    DictionaryEntry("morning", "umaga", "The early part of the day."),
+    DictionaryEntry("night", "gabi", "The dark part of the day."),
+    DictionaryEntry("big", "malaki", "Large in size."),
+    DictionaryEntry("small", "maliit", "Little in size."),
+    DictionaryEntry("fast", "mabilis", "Moving or happening quickly."),
+    DictionaryEntry("slow", "mabagal", "Moving or happening without speed."),
+    DictionaryEntry("strong", "malakas", "Having great strength or power."),
+    DictionaryEntry("weak", "mahina", "Lacking strength or power."),
+    DictionaryEntry("clean", "malinis", "Free from dirt."),
+    DictionaryEntry("important", "mahalaga", "Having great value or significance."),
+    DictionaryEntry("question", "tanong", "A sentence asking for information."),
+    DictionaryEntry("answer", "sagot", "A reply to a question."),
+    DictionaryEntry("knowledge", "kaalaman", "Facts and skills learned through experience or study."),
+    DictionaryEntry("dream", "pangarap / panaginip", "A goal or an experience while sleeping."),
+    DictionaryEntry("work", "trabaho / magtrabaho", "An activity done to achieve a result."),
+    DictionaryEntry("play", "maglaro", "To take part in an activity for enjoyment."),
+    DictionaryEntry("eat", "kumain", "To take food into the body."),
+    DictionaryEntry("drink", "uminom", "To take a liquid into the body."),
+    DictionaryEntry("walk", "maglakad", "To move on foot."),
+    DictionaryEntry("run", "tumakbo", "To move quickly on foot."),
+    DictionaryEntry("beautiful day", "magandang araw", "A friendly expression or greeting."),
+    DictionaryEntry("where", "saan", "Used to ask about a place."),
+    DictionaryEntry("when", "kailan", "Used to ask about time."),
+    DictionaryEntry("why", "bakit", "Used to ask for a reason."),
+    DictionaryEntry("what", "ano", "Used to ask about a thing or idea."),
+    DictionaryEntry("who", "sino", "Used to ask about a person."),
+    DictionaryEntry("how", "paano", "Used to ask about a method or way.")
+)
+
+@Composable
+private fun DictionaryPage() {
+    var query by rememberSaveable { mutableStateOf("") }
+    val filteredWords = remember(query) {
+        val normalized = query.trim().lowercase()
+        if (normalized.isBlank()) tagalogEnglishWords
+        else tagalogEnglishWords.filter {
+            it.english.lowercase().contains(normalized) ||
+                it.tagalog.lowercase().contains(normalized) ||
+                it.meaning.lowercase().contains(normalized)
+        }
+    }
+
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
+    ) {
+        Heading("📖 Tagalog–English Dictionary", "Search words in English or Tagalog. Works offline.")
+        OutlinedTextField(
+            value = query,
+            onValueChange = { query = it },
+            modifier = Modifier.fillMaxWidth(),
+            label = { Text("Search English or Tagalog") },
+            placeholder = { Text("e.g. love, salamat, kaibigan") },
+            singleLine = true,
+            trailingIcon = {
+                if (query.isNotBlank()) {
+                    TextButton(onClick = { query = "" }) { Text("Clear") }
+                }
+            }
+        )
+        Text(
+            "${filteredWords.size} word${if (filteredWords.size == 1) "" else "s"} found",
+            color = muted,
+            style = MaterialTheme.typography.bodySmall
+        )
+
+        if (filteredWords.isEmpty()) {
+            CardBox("No matching word", "Try another spelling or search using the English or Tagalog word.") {}
+        } else {
+            filteredWords.forEach { entry ->
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(20.dp),
+                    colors = CardDefaults.cardColors(containerColor = panel),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, cyan.copy(alpha = 0.24f))
+                ) {
+                    Column(
+                        modifier = Modifier.fillMaxWidth().padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Text(entry.english.replaceFirstChar { it.uppercase() }, color = cyan, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.ExtraBold)
+                        Text("Tagalog: ${entry.tagalog}", color = pink, fontWeight = FontWeight.Bold)
+                        Text(entry.meaning, color = muted, style = MaterialTheme.typography.bodyMedium)
+                    }
+                }
+            }
+        }
+        Text(
+            "Note: This is a built-in starter dictionary. Some words have multiple translations depending on context.",
+            color = muted,
+            style = MaterialTheme.typography.bodySmall
         )
     }
 }
