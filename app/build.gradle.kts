@@ -4,6 +4,17 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
+val signingStoreFile = System.getenv("SIGNING_STORE_FILE")
+val signingStorePassword = System.getenv("SIGNING_STORE_PASSWORD")
+val signingKeyAlias = System.getenv("SIGNING_KEY_ALIAS")
+val signingKeyPassword = System.getenv("SIGNING_KEY_PASSWORD")
+
+val releaseSigningAvailable =
+    !signingStoreFile.isNullOrBlank() &&
+    !signingStorePassword.isNullOrBlank() &&
+    !signingKeyAlias.isNullOrBlank() &&
+    !signingKeyPassword.isNullOrBlank()
+
 android {
     namespace = "com.studymate.ph"
     compileSdk = 35
@@ -14,6 +25,25 @@ android {
         targetSdk = 35
         versionCode = 1
         versionName = "1.0"
+    }
+
+    if (releaseSigningAvailable) {
+        signingConfigs {
+            create("release") {
+                storeFile = file(signingStoreFile!!)
+                storePassword = signingStorePassword!!
+                keyAlias = signingKeyAlias!!
+                keyPassword = signingKeyPassword!!
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            if (releaseSigningAvailable) {
+                signingConfig = signingConfigs.getByName("release")
+            }
+        }
     }
 
     compileOptions {
